@@ -19,3 +19,8 @@ main.container { max-width: 760px; }
 
 #status { color: var(--pico-muted-color); }
 #status.error { color: var(--pico-del-color); }
+
+/* ================= LOGIN ================= */
+.auth-card { max-width: 26rem; margin: 3rem auto; }
+.auth-card button { width: 100%; }
+.form-error { color: var(--pico-del-color); margin-bottom: 1rem; }

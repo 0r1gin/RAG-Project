@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin login · doc-chat</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <link rel="stylesheet" href="style.css">
+  <script src="common.js"></script>
+</head>
+<body>
+  <header class="container app-header">
+    <nav>
+      <ul><li><strong>doc-chat</strong></li></ul>
+      <ul>
+        <li><button id="theme-toggle" type="button" class="secondary outline small"></button></li>
+        <li><a href="/">Back to chat</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main class="container">
+    <article class="auth-card">
+      <h2>Admin login</h2>
+      <form id="login-form">
+        <label>Username
+          <input id="username" type="text" autocomplete="username" required>
+        </label>
+        <label>Password
+          <input id="password" type="password" autocomplete="current-password" required>
+        </label>
+        <p id="form-error" class="form-error" role="alert" hidden></p>
+        <button type="submit" id="login-btn">Log in</button>
+      </form>
+    </article>
+  </main>
+
+  <script src="login.js"></script>
+</body>
+</html>

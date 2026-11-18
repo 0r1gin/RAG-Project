@@ -1,11 +1,41 @@
 import os
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile
+from pydantic import BaseModel, Field
 
+import auth
 import documents
 import store
 
-router = APIRouter(prefix="/api/admin", tags=["admin"])
+# Public routes: login and logout only
+public = APIRouter(prefix="/api/admin", tags=["admin-auth"])
+
+# Protected routes: every route here requires a valid session cookie
+router = APIRouter(
+    prefix="/api/admin", tags=["admin"], dependencies=[Depends(auth.require_admin)]
+)
+
+
+class Login(BaseModel):
+    username: str = Field(max_length=100)
+    password: str = Field(max_length=200)
+
+
+@public.post("/login")
+def login(body: Login, request: Request, response: Response):
+    auth.check_rate_limit(request)
+    if not auth.check_credentials(body.username, body.password):
+        auth.record_failure(request)
+        raise HTTPException(401, "Invalid username or password")
+    auth.clear_failures(request)
+    auth.issue_token(response)
+    return {"ok": True}
+
+
+@public.post("/logout")
+def logout(response: Response):
+    response.delete_cookie(auth.COOKIE_NAME, path="/")
+    return {"ok": True}
 
 
 @router.get("/documents")

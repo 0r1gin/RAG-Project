@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,11 +8,18 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
   <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
   <header class="container">
     <nav>
-      <ul><li><strong>doc-chat admin</strong></li></ul>
-      <ul><li><a href="/">Back to chat</a></li></ul>
+      <ul>
+        <li><strong>doc-chat admin</strong></li>
+      </ul>
+      <ul>
+        <li><button id="theme-toggle" type="button" class="secondary outline small"></button></li>
+        <li><a href="/">Back to chat</a></li>
+        <li><button id="logout-btn" type="button" class="secondary outline small">Log out</button></li>
+      </ul>
     </nav>
   </header>
 
@@ -28,7 +36,13 @@
     <figure>
       <table>
         <thead>
-          <tr><th>File</th><th>Chunks</th><th>Size</th><th>Uploaded</th><th></th></tr>
+          <tr>
+            <th>File</th>
+            <th>Chunks</th>
+            <th>Size</th>
+            <th>Uploaded</th>
+            <th></th>
+          </tr>
         </thead>
         <tbody id="doc-rows"></tbody>
       </table>
@@ -37,4 +51,5 @@
 
   <script src="admin.js"></script>
 </body>
+
 </html>

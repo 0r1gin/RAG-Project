@@ -91,3 +91,8 @@ form.addEventListener("submit", async (event) => {
 });
 
 loadDocs().catch((err) => setStatus(err.message, true));
+
+$("logout-btn").addEventListener("click", async () => {
+  try { await fetch("/api/admin/logout", { method: "POST" }); } catch {}
+  window.location.href = "/login.html";
+});
