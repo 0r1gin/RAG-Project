@@ -5,12 +5,11 @@ from pydantic import BaseModel, Field
 
 import auth
 import documents
+import otp
 import store
 
-# Public routes: login and logout only
 public = APIRouter(prefix="/api/admin", tags=["admin-auth"])
 
-# Protected routes: every route here requires a valid session cookie
 router = APIRouter(
     prefix="/api/admin", tags=["admin"], dependencies=[Depends(auth.require_admin)]
 )
@@ -21,12 +20,35 @@ class Login(BaseModel):
     password: str = Field(max_length=200)
 
 
+class OtpBody(BaseModel):
+    challenge_id: str = Field(max_length=100)
+    code: str = Field(pattern=r"^[0-9]{6}$")    # [0-9], not \d, which also matches non-ASCII digits
+
+
 @public.post("/login")
-def login(body: Login, request: Request, response: Response):
+def login(body: Login, request: Request):
+    """Step 1: password. On success a code is sent to Telegram. No session yet."""
     auth.check_rate_limit(request)
     if not auth.check_credentials(body.username, body.password):
         auth.record_failure(request)
         raise HTTPException(401, "Invalid username or password")
+    # Failures are NOT cleared here: the OTP step must still pass.
+    try:
+        challenge_id = otp.start_challenge()
+    except otp.OtpCooldown:
+        raise HTTPException(429, "Please wait 30 seconds before requesting another code")
+    except RuntimeError:
+        raise HTTPException(502, "Could not send the verification code")
+    return {"otp_required": True, "challenge_id": challenge_id}
+
+
+@public.post("/verify-otp")
+def verify_otp(body: OtpBody, request: Request, response: Response):
+    """Step 2: the Telegram code. Only now is the session cookie issued."""
+    auth.check_rate_limit(request)
+    if not otp.verify_challenge(body.challenge_id, body.code):
+        auth.record_failure(request)
+        raise HTTPException(401, "Invalid or expired code")
     auth.clear_failures(request)
     auth.issue_token(response)
     return {"ok": True}

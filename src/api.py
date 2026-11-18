@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 import admin
+import otp
 import documents
 from query import answer_with_sources, collection
 
@@ -14,6 +15,7 @@ FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    otp.verify_link()                      # refuse to start if the chat id doesn't match the handle
     count = documents.rebuild_index()      # Firestore → Chroma
     print(f"Index rebuilt from Firestore: {count} chunks")
     yield

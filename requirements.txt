@@ -8,3 +8,4 @@ firebase-admin
 python-multipart
 argon2-cffi
 PyJWT
+httpx
