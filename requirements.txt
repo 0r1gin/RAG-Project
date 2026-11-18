@@ -2,3 +2,5 @@ chromadb
 pypdf
 anthropic
 python-dotenv
+fastapi
+uvicorn

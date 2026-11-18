@@ -18,7 +18,7 @@ def retrieve(question: str):
     return results["documents"][0], results["metadatas"][0]
 
 
-def answer(question: str) -> str:
+def answer_with_sources(question: str):
     docs, metas = retrieve(question)
     context = "\n\n".join(
         f"[Source: {m['source']}, chunk {m['chunk']}]\n{d}" for d, m in zip(docs, metas)
@@ -32,11 +32,16 @@ def answer(question: str) -> str:
     )
     response = llm.messages.create(
         model=MODEL,
-        max_tokens=5000,
+        max_tokens=1000,
         messages=[{"role": "user", "content": prompt}],
     )
-    return "".join(block.text for block in response.content if block.type == "text")
+    text = "".join(b.text for b in response.content if b.type == "text")
+    sources = sorted({m["source"] for m in metas})
+    return text, sources
 
+
+def answer(question: str) -> str:
+    return answer_with_sources(question)[0]
 
 if __name__ == "__main__":
     q = " ".join(sys.argv[1:]) or input("Question: ")
