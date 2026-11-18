@@ -1,0 +1,21 @@
+/* ---------- THEME: change these first ---------- */
+:root {
+  --pico-primary: #4f46e5;               /* main accent colour */
+  --pico-primary-hover: #4338ca;
+  --pico-primary-background: #4f46e5;    /* button fill */
+  --pico-primary-hover-background: #4338ca;
+  --pico-border-radius: 0.75rem;
+  --pico-font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* ---------- LAYOUT ---------- */
+main.container { max-width: 760px; }
+
+/* ---------- ANSWER BOX ---------- */
+#answer {
+  white-space: pre-wrap;     /* keeps line breaks from the model */
+  margin-bottom: 0;
+}
+
+#status { color: var(--pico-muted-color); }
+#status.error { color: var(--pico-del-color); }
