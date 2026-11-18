@@ -6,34 +6,72 @@
   <title>Admin · doc-chat</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
   <link rel="stylesheet" href="style.css">
+  <script src="common.js"></script>
 </head>
 <body>
-  <header class="container">
+  <header class="container app-header">
     <nav>
-      <ul><li><strong>doc-chat admin</strong></li></ul>
-      <ul><li><a href="/">Back to chat</a></li></ul>
+      <ul>
+        <li><strong>doc-chat</strong></li>
+        <li><small class="muted">admin</small></li>
+      </ul>
+      <ul>
+        <li><button id="theme-toggle" type="button" class="secondary outline small"></button></li>
+        <li><a href="/">Back to chat</a></li>
+      </ul>
     </nav>
   </header>
 
-  <main class="container">
-    <h1>Documents</h1>
+  <main class="container admin">
+    <section class="stats" aria-label="Summary">
+      <article class="stat"><strong id="stat-docs">–</strong><small class="muted">Documents</small></article>
+      <article class="stat"><strong id="stat-chunks">–</strong><small class="muted">Chunks</small></article>
+      <article class="stat"><strong id="stat-size">–</strong><small class="muted">Total size</small></article>
+    </section>
 
-    <form id="upload-form">
-      <input type="file" id="file" accept=".pdf,.txt" required>
-      <button type="submit" id="upload-btn">Upload and index</button>
-    </form>
+    <section>
+      <h2>Add documents</h2>
+      <label class="dropzone" id="dropzone">
+        <input type="file" id="file" accept=".pdf,.txt" multiple>
+        <strong>Drop files here or click to choose</strong>
+        <small class="muted">PDF or TXT, up to 5 MB each, up to 20 files at once</small>
+      </label>
 
-    <p id="status" role="status" hidden></p>
+      <div id="queue-panel" hidden>
+        <progress id="overall" value="0" max="1"></progress>
+        <ul id="queue" class="queue" aria-live="polite"></ul>
+        <button id="clear-finished" type="button" class="secondary outline small">Clear finished</button>
+      </div>
+    </section>
 
-    <figure>
-      <table>
-        <thead>
-          <tr><th>File</th><th>Chunks</th><th>Size</th><th>Uploaded</th><th></th></tr>
-        </thead>
-        <tbody id="doc-rows"></tbody>
-      </table>
-    </figure>
+    <section>
+      <div class="list-head">
+        <h2>Documents</h2>
+        <input type="search" id="search" placeholder="Search by file name" aria-label="Search documents">
+      </div>
+      <figure>
+        <table>
+          <thead>
+            <tr><th>File</th><th>Chunks</th><th>Size</th><th>Uploaded</th><th></th></tr>
+          </thead>
+          <tbody id="doc-rows"></tbody>
+        </table>
+      </figure>
+      <p id="empty-docs" class="muted" hidden>No documents yet. Add some above.</p>
+      <p id="no-match" class="muted" hidden>No files match your search.</p>
+    </section>
   </main>
+
+  <dialog id="confirm-dialog">
+    <article>
+      <h3>Delete document?</h3>
+      <p id="confirm-text"></p>
+      <footer>
+        <button type="button" class="secondary" id="confirm-cancel">Cancel</button>
+        <button type="button" class="danger" id="confirm-ok">Delete</button>
+      </footer>
+    </article>
+  </dialog>
 
   <script src="admin.js"></script>
 </body>
