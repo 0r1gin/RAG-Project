@@ -4,47 +4,53 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Chat with your documents</title>
-
-  <!-- Pico CSS from a CDN. Pin an exact version (e.g. @2.0.6) once you're happy with it. -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
-  <!-- Your overrides load AFTER Pico so they win -->
   <link rel="stylesheet" href="style.css">
+  <script src="common.js"></script>
 </head>
 <body>
-  <header class="container">
+  <header class="container app-header">
     <nav>
-      <ul><li><strong>doc-chat</strong></li></ul>
-      <ul><li><button id="theme-toggle" class="secondary outline">Dark mode</button></li></ul>
+      <ul>
+        <li><strong>doc-chat</strong></li>
+        <li><small id="kb-status" class="muted"></small></li>
+      </ul>
+      <ul>
+        <li><button id="new-chat" type="button" class="secondary outline small">New chat</button></li>
+        <li><button id="theme-toggle" type="button" class="secondary outline small"></button></li>
+        <li><a href="/admin.html">Admin</a></li>
+      </ul>
     </nav>
   </header>
 
-  <main class="container">
-    <hgroup>
-      <h1>Chat with your documents</h1>
-      <p>Ask a question. Answers come only from the indexed files.</p>
-    </hgroup>
-
-    <form id="ask-form">
-      <fieldset role="group">
-        <input id="question" type="text" placeholder="e.g. What are the two kinds of loops?"
-               minlength="3" maxlength="500" required>
-        <button id="ask-btn" type="submit">Ask</button>
-      </fieldset>
-    </form>
-
-    <p id="status" role="status" hidden></p>
-
-    <article id="result" hidden>
-      <header>Answer</header>
-      <p id="answer"></p>
-      <footer><small>Sources: <span id="sources"></span></small></footer>
-    </article>
+  <main class="container chat">
+    <section id="messages" aria-live="polite" aria-label="Conversation">
+      <div id="empty" class="empty">
+        <h1>Ask your documents</h1>
+        <p class="muted">Answers come only from the indexed files, with their sources.</p>
+        <div id="suggestions" class="chips"></div>
+      </div>
+    </section>
   </main>
 
-  <footer class="container">
-    <small>Built with FastAPI, ChromaDB and Claude.</small>
+  <footer class="composer">
+    <div class="container">
+      <form id="ask-form">
+        <textarea id="question" rows="1" maxlength="500"
+                  placeholder="Ask a question…" aria-label="Your question"></textarea>
+        <button type="submit" id="ask-btn">Send</button>
+      </form>
+      <small class="muted">
+        Enter to send, Shift+Enter for a new line. Each question is answered on its own,
+        with no memory of earlier ones.
+      </small>
+    </div>
   </footer>
 
+  <!-- Pin exact versions. If these fail to load, answers fall back to plain text. -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
   <script src="app.js"></script>
 </body>
+
 </html>
