@@ -5,7 +5,7 @@ from pypdf import PdfReader
 
 DATA_DIR = Path("data")
 DB_DIR = "chroma_db"
-CHUNK_WORDS = 4000      # words per chunk
+CHUNK_WORDS = 400     # words per chunk
 OVERLAP_WORDS = 50     # shared words between neighbouring chunks
 
 

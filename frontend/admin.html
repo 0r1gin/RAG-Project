@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin · doc-chat</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="container">
+    <nav>
+      <ul><li><strong>doc-chat admin</strong></li></ul>
+      <ul><li><a href="/">Back to chat</a></li></ul>
+    </nav>
+  </header>
+
+  <main class="container">
+    <h1>Documents</h1>
+
+    <form id="upload-form">
+      <input type="file" id="file" accept=".pdf,.txt" required>
+      <button type="submit" id="upload-btn">Upload and index</button>
+    </form>
+
+    <p id="status" role="status" hidden></p>
+
+    <figure>
+      <table>
+        <thead>
+          <tr><th>File</th><th>Chunks</th><th>Size</th><th>Uploaded</th><th></th></tr>
+        </thead>
+        <tbody id="doc-rows"></tbody>
+      </table>
+    </figure>
+  </main>
+
+  <script src="admin.js"></script>
+</body>
+</html>

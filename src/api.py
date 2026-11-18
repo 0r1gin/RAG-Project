@@ -5,7 +5,8 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-import ingest
+import admin
+import documents
 from query import answer_with_sources, collection
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
@@ -13,17 +14,17 @@ FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Free hosts often wipe the disk, so rebuild the index if it is empty.
-    if collection.count() == 0:
-        ingest.main()
+    count = documents.rebuild_index()      # Firestore → Chroma
+    print(f"Index rebuilt from Firestore: {count} chunks")
     yield
 
 
 app = FastAPI(lifespan=lifespan)
+app.include_router(admin.router)
 
 
 class Question(BaseModel):
-    question: str = Field(min_length=3, max_length=500)   # caps API spend
+    question: str = Field(min_length=3, max_length=500)
 
 
 @app.get("/health")
@@ -37,5 +38,6 @@ def ask(body: Question):
     return {"answer": text, "sources": sources}
 
 
-# Must come AFTER the API routes, or it will swallow them.
-app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+# Must stay LAST, after all API routes.
+if FRONTEND_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
