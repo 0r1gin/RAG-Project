@@ -10,12 +10,6 @@ function setError(message) {
   el.hidden = !message;
 }
 
-function setBusy(button, on) {
-  if (on) button.setAttribute("aria-busy", "true");
-  else button.removeAttribute("aria-busy");
-  button.disabled = on;
-}
-
 async function post(path, payload) {
   const res = await fetch(`/api/admin${path}`, {
     method: "POST",
@@ -33,6 +27,10 @@ function showStep(step) {
   $("login-form").hidden = step !== "password";
   $("otp-form").hidden = step !== "otp";
   setError("");
+  $("auth-title").textContent = step === "otp" ? "Check your Telegram" : "Sign in";
+  $("auth-sub").textContent = step === "otp"
+    ? "Enter the code to finish signing in"
+    : "Admin access to manage your document library";
   if (step === "otp") {
     $("otp").value = "";
     $("otp").focus();

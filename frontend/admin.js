@@ -54,20 +54,39 @@ function cell(text, className = "") {
   return td;
 }
 
+function fileCell(filename) {
+  const td = document.createElement("td");
+  td.className = "name";
+  const wrap = document.createElement("div");
+  wrap.className = "file-cell";
+  const ext = (filename.split(".").pop() || "").toLowerCase();
+  const badge = document.createElement("span");
+  badge.className = `file-badge ${ext}`;
+  badge.textContent = ext.toUpperCase().slice(0, 4) || "FILE";
+  const name = document.createElement("span");
+  name.textContent = filename;            // textContent: file names can never inject HTML
+  wrap.append(badge, name);
+  td.append(wrap);
+  return td;
+}
+
 function docRow(d) {
   const tr = document.createElement("tr");
   tr.append(
-    cell(d.filename, "name"),
-    cell(d.chunk_count),
-    cell(formatBytes(d.size_bytes)),
-    cell(new Date(d.uploaded_at).toLocaleString())
+    fileCell(d.filename),
+    cell(d.chunk_count, "num col-hide"),
+    cell(formatBytes(d.size_bytes), "num col-hide"),
+    cell(new Date(d.uploaded_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }), "num col-hide")
   );
   const td = document.createElement("td");
   td.className = "actions";
   const del = document.createElement("button");
   del.type = "button";
-  del.textContent = "Delete";
-  del.className = "secondary outline small";
+  del.className = "btn btn-sm";
+  del.setAttribute("aria-label", `Delete ${d.filename}`);
+  const label = document.createElement("span");
+  label.textContent = "Delete";
+  del.append(icon("trash", 15), label);
   del.addEventListener("click", () => askDelete(d));
   td.append(del);
   tr.append(td);
@@ -127,6 +146,7 @@ function renderQueue() {
   const finished = queue.filter((q) => !isPending(q)).length;
   overallEl.max = Math.max(queue.length, 1);
   overallEl.value = finished;
+  $("queue-meta").textContent = `${finished} of ${queue.length} done`;
 
   queueEl.replaceChildren(
     ...queue.map((q) => {
@@ -134,10 +154,12 @@ function renderQueue() {
       const name = document.createElement("span");
       name.className = "fname";
       name.textContent = q.file.name;
+      name.title = q.file.name;
       const state = document.createElement("span");
-      state.className = `state ${q.state}`;
+      state.className = `pill ${q.state}`;
       state.textContent = q.state === "queued" ? "Waiting" : q.text;
-      li.append(name, state);
+      state.title = state.textContent;
+      li.append(icon("file", 16), name, state);
       return li;
     })
   );
@@ -208,8 +230,7 @@ $("confirm-ok").addEventListener("click", async () => {
   const doc = pendingDelete;
   if (!doc) return;
   const btn = $("confirm-ok");
-  btn.setAttribute("aria-busy", "true");
-  btn.disabled = true;
+  setBusy(btn, true);
   try {
     await api(`/documents/${doc.id}`, { method: "DELETE" });
     pendingDelete = null;
@@ -219,15 +240,27 @@ $("confirm-ok").addEventListener("click", async () => {
   } catch (err) {
     toast(err.message, "error");
   } finally {
-    btn.removeAttribute("aria-busy");
-    btn.disabled = false;
+    setBusy(btn, false);
   }
 });
 
 searchEl.addEventListener("input", render);
 loadDocs();
 
+// Full-screen "signing out" view, with a manual link in case the redirect stalls.
+function showSignOut() {
+  const splash = document.createElement("div");
+  splash.className = "splash";
+  splash.setAttribute("role", "status");
+  splash.innerHTML =   // static markup, no user data
+    `<div class="splash-inner"><div class="mark">${LOGO_SVG}</div>` +
+    `<p>Signing you out…</p>` +
+    `<small>If you aren't signed out, <a href="/login.html">click here</a></small></div>`;
+  document.body.append(splash);
+}
+
 $("logout-btn").addEventListener("click", async () => {
+  showSignOut();
   try { await fetch("/api/admin/logout", { method: "POST" }); } catch {}
   window.location.href = "/login.html";
 });

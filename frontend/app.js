@@ -6,28 +6,56 @@ const SUGGESTIONS = [
   "What does assembly language use?",
   "What are decision structures?",
 ];
+const SUGGESTION_STYLES = [
+  { icon: "sparkle", color: "var(--c-purple)" },
+  { icon: "book", color: "var(--c-green)" },
+  { icon: "search", color: "var(--c-blue)" },
+  { icon: "bulb", color: "var(--c-amber)" },
+];
+const MAX_CHARS = 500;
 
 const $ = (id) => document.getElementById(id);
+const chatEl = $("chat");
 const messagesEl = $("messages");
 const emptyEl = $("empty");
 const form = $("ask-form");
 const input = $("question");
 const sendBtn = $("ask-btn");
 const statusEl = $("kb-status");
+const statusPill = $("status-pill");
+const counterEl = $("counter");
 
 let busy = false;
 
 initThemeToggle($("theme-toggle"));
 
-// ---------- suggestion chips ----------
-for (const text of SUGGESTIONS) {
-  const chip = document.createElement("button");
-  chip.type = "button";
-  chip.className = "chip";
-  chip.textContent = text;
-  chip.addEventListener("click", () => send(text));
-  $("suggestions").append(chip);
-}
+// ---------- greeting ----------
+(function greet() {
+  const h = new Date().getHours();
+  const part = h < 5 ? "Working late" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+  $("greeting").textContent = `${part}, let's find some answers`;
+})();
+
+// ---------- suggestion cards ----------
+SUGGESTIONS.forEach((text, i) => {
+  const style = SUGGESTION_STYLES[i % SUGGESTION_STYLES.length];
+  const card = document.createElement("button");
+  card.type = "button";
+  card.className = "suggestion";
+  card.style.setProperty("--c", style.color);
+  const label = document.createElement("span");
+  label.textContent = text;
+  card.append(icon(style.icon, 18), label);
+  card.addEventListener("click", () => send(text));
+  $("suggestions").append(card);
+});
+
+$("prompts-btn").addEventListener("click", () => {
+  if (!SUGGESTIONS.length) return;
+  input.value = SUGGESTIONS[Math.floor(Math.random() * SUGGESTIONS.length)];
+  onInput();
+  input.focus();
+});
 
 // ---------- rendering helpers ----------
 function renderMarkdown(text) {
@@ -42,10 +70,21 @@ function renderMarkdown(text) {
   return box;
 }
 
+function setConversationMode(on) {
+  chatEl.classList.toggle("has-messages", on);
+  emptyEl.hidden = on;
+}
+
 function addMessage(role) {
-  emptyEl.hidden = true;
+  setConversationMode(true);
   const row = document.createElement("div");
   row.className = `msg ${role}`;
+  if (role === "assistant") {
+    const avatar = document.createElement("div");
+    avatar.className = "avatar";
+    avatar.innerHTML = LOGO_SVG;   // static markup
+    row.append(avatar);
+  }
   const bubble = document.createElement("div");
   bubble.className = "bubble";
   row.append(bubble);
@@ -55,12 +94,28 @@ function addMessage(role) {
 }
 
 function typingIndicator() {
-  const el = document.createElement("div");
-  el.className = "typing";
-  el.setAttribute("role", "status");
-  el.setAttribute("aria-label", "Thinking");
-  el.innerHTML = "<span></span><span></span><span></span>";   // static markup, no user data
-  return el;
+  const wrap = document.createElement("div");
+  wrap.className = "typing-row";
+  wrap.setAttribute("role", "status");
+  const dots = document.createElement("div");
+  dots.className = "typing";
+  dots.setAttribute("aria-hidden", "true");
+  dots.innerHTML = "<span></span><span></span><span></span>";   // static markup, no user data
+  const label = document.createElement("span");
+  label.textContent = "Searching your documents…";
+  wrap.append(dots, label);
+  return wrap;
+}
+
+function actionButton(iconName, text, onClick) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "action-btn";
+  const label = document.createElement("span");
+  label.textContent = text;
+  btn.append(icon(iconName, 15), label);
+  btn.addEventListener("click", onClick);
+  return btn;
 }
 
 function showAnswer(bubble, { answer, sources }) {
@@ -69,78 +124,83 @@ function showAnswer(bubble, { answer, sources }) {
   const meta = document.createElement("div");
   meta.className = "bubble-meta";
   if (sources && sources.length) {
-    const label = document.createElement("small");
-    label.className = "muted";
-    label.textContent = "Sources:";
+    const label = document.createElement("span");
+    label.className = "meta-label";
+    label.textContent = "Sources";
     meta.append(label);
     for (const name of sources) {
       const chip = document.createElement("span");
-      chip.className = "chip";
-      chip.textContent = name;
+      chip.className = "source-chip";
+      const text = document.createElement("span");
+      text.textContent = name;
+      chip.append(icon("file", 14), text);
       meta.append(chip);
     }
   }
-  const copy = document.createElement("button");
-  copy.type = "button";
-  copy.className = "chip";
-  copy.textContent = "Copy";
-  copy.addEventListener("click", async () => {
+
+  const actions = document.createElement("div");
+  actions.className = "meta-actions";
+  const copy = actionButton("copy", "Copy", async () => {
     try {
       await navigator.clipboard.writeText(answer);
-      toast("Answer copied", "success", 2000);
+      copy.replaceChildren(icon("check", 15), Object.assign(document.createElement("span"), { textContent: "Copied" }));
+      setTimeout(() => copy.replaceChildren(icon("copy", 15), Object.assign(document.createElement("span"), { textContent: "Copy" })), 1800);
     } catch {
       toast("Could not copy", "error");
     }
   });
-  meta.append(copy);
+  actions.append(copy);
+  meta.append(actions);
   bubble.append(meta);
 }
 
 function showError(bubble, row, question) {
-  const text = document.createElement("p");
+  const box = document.createElement("div");
+  box.className = "error-box";
+  const text = document.createElement("span");
   text.textContent = "Something went wrong reaching the server.";
-  text.style.margin = "0 0 0.5rem";
-  const retry = document.createElement("button");
-  retry.type = "button";
-  retry.className = "chip";
-  retry.textContent = "Try again";
-  retry.addEventListener("click", () => {
+  const retry = actionButton("refresh", "Try again", () => {
     const userRow = row.previousElementSibling;   // remove the failed exchange, then resend
     row.remove();
     if (userRow) userRow.remove();
     send(question);
   });
-  bubble.replaceChildren(text, retry);
+  retry.classList.add("outlined");
+  box.append(icon("alert", 18), text, retry);
+  bubble.replaceChildren(box);
 }
 
-// ---------- sending ----------
-function setBusy(on) {
+// ---------- composer ----------
+function setSending(on) {
   busy = on;
-  sendBtn.disabled = on;
-  if (on) sendBtn.setAttribute("aria-busy", "true");
-  else sendBtn.removeAttribute("aria-busy");
+  setBusy(sendBtn, on);
+  if (!on) onInput();
 }
 
-function resizeInput() {
+function onInput() {
   input.style.height = "auto";
-  input.style.height = `${Math.min(input.scrollHeight, 160)}px`;
+  input.style.height = `${Math.min(input.scrollHeight, 200)}px`;
+  const n = input.value.length;
+  counterEl.textContent = n ? `${n}/${MAX_CHARS}` : "";
+  counterEl.classList.toggle("near", n > MAX_CHARS * 0.9);
+  sendBtn.classList.toggle("idle", input.value.trim().length < 3);
 }
 
 async function send(question) {
   question = question.trim();
   if (busy || question.length < 3) return;
-  setBusy(true);
+  setSending(true);
 
   addMessage("user").bubble.textContent = question;
   input.value = "";
-  resizeInput();
+  onInput();
 
   const { row, bubble } = addMessage("assistant");
   bubble.append(typingIndicator());
   const wakeTimer = setTimeout(() => {
     const note = document.createElement("small");
-    note.className = "muted";
-    note.textContent = " Still working. A free server may be waking up (up to a minute).";
+    note.className = "wake-note";
+    note.textContent = "Still working. A free server may be waking up (up to a minute).";
     bubble.append(note);
   }, 8000);
 
@@ -158,7 +218,8 @@ async function send(question) {
     showError(bubble, row, question);
   } finally {
     clearTimeout(wakeTimer);
-    setBusy(false);
+    setSending(false);
+    row.scrollIntoView({ behavior: "smooth", block: "end" });
     input.focus();
   }
 }
@@ -168,7 +229,7 @@ form.addEventListener("submit", (e) => {
   e.preventDefault();
   send(input.value);
 });
-input.addEventListener("input", resizeInput);
+input.addEventListener("input", onInput);
 input.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
     e.preventDefault();
@@ -177,19 +238,33 @@ input.addEventListener("keydown", (e) => {
 });
 $("new-chat").addEventListener("click", () => {
   messagesEl.querySelectorAll(".msg").forEach((el) => el.remove());
-  emptyEl.hidden = false;
+  setConversationMode(false);
   input.focus();
 });
+$("focus-input").addEventListener("click", () => input.focus());
+onInput();
 
 // ---------- server status (also warms up a sleeping free host) ----------
 (async function checkServer() {
-  statusEl.textContent = "Connecting…";
+  const addBtn = statusPill.querySelector(".btn");
+  addBtn.hidden = true;
+  const set = (state, text) => {
+    statusPill.className = `status-pill ${state}`;
+    statusEl.textContent = text;
+  };
+  set("loading", "Connecting…");
   try {
     const data = await (await fetch(`${API_BASE}/health`)).json();
-    statusEl.textContent = data.chunks
-      ? `Ready · ${data.chunks} passages indexed`
-      : "Ready · no documents indexed yet";
+    if (data.chunks) {
+      set("ok", "");
+      const strong = document.createElement("strong");
+      strong.textContent = data.chunks.toLocaleString();
+      statusEl.append("Ready · ", strong, " passages");
+    } else {
+      set("warn", "No documents indexed yet");
+      addBtn.hidden = false;
+    }
   } catch {
-    statusEl.textContent = "Server unavailable. It may be waking up.";
+    set("err", "Server unavailable. It may be waking up.");
   }
 })();

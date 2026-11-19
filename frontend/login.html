@@ -1,55 +1,68 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Admin login · doc-chat</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <title>Sign in · doc-chat</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500&display=swap">
   <link rel="stylesheet" href="style.css">
   <script src="common.js"></script>
 </head>
-
 <body>
-  <header class="container app-header">
-    <nav>
-      <ul>
-        <li><strong>doc-chat</strong></li>
-      </ul>
-      <ul>
-        <li><button id="theme-toggle" type="button" class="secondary outline small"></button></li>
-        <li><a href="/">Back to chat</a></li>
-      </ul>
-    </nav>
-  </header>
+  <div class="auth">
+    <div class="auth-top">
+      <a href="/"><span data-icon="arrowLeft" data-size="16"></span>Back to chat</a>
+      <button id="theme-toggle" type="button" class="icon-btn"></button>
+    </div>
 
-  <main class="container">
-    <article class="auth-card">
-      <h2>Admin login</h2>
+    <main class="auth-main">
+      <div class="auth-mark" data-logo></div>
+      <h1 id="auth-title" class="auth-title">Sign in</h1>
+      <p id="auth-sub" class="auth-sub">Admin access to manage your document library</p>
 
-      <form id="login-form">
-        <label>Username
-          <input id="username" type="text" autocomplete="username" required>
-        </label>
-        <label>Password
-          <input id="password" type="password" autocomplete="current-password" required>
-        </label>
-        <button type="submit" id="login-btn">Continue</button>
-      </form>
+      <div class="auth-card">
+        <form id="login-form">
+          <label class="field">
+            <span class="field-label">Username</span>
+            <input id="username" class="input" type="text" autocomplete="username"
+                   placeholder="Your username" required>
+          </label>
+          <label class="field">
+            <span class="field-label">Password</span>
+            <input id="password" class="input" type="password" autocomplete="current-password"
+                   placeholder="Your password" required>
+          </label>
+          <button type="submit" id="login-btn" class="btn btn-primary btn-lg btn-block"><span>Continue</span></button>
+        </form>
 
-      <form id="otp-form" hidden>
-        <p>Enter the 6-digit code we sent to your Telegram.</p>
-        <input id="otp" type="text" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code"
-          placeholder="123456" aria-label="Verification code" required>
-        <button type="submit" id="otp-btn">Verify</button>
-        <button type="button" id="restart-btn" class="secondary outline">Start over</button>
-      </form>
+        <form id="otp-form" hidden>
+          <div class="otp-help">
+            <span data-icon="send" data-size="16"></span>
+            <span>We sent a 6-digit code to your linked Telegram account. It expires shortly.</span>
+          </div>
+          <label class="field">
+            <span class="field-label">Verification code</span>
+            <input id="otp" class="input otp-input" type="text" inputmode="numeric" maxlength="6"
+                   pattern="[0-9]{6}" autocomplete="one-time-code" placeholder="••••••" required>
+          </label>
+          <button type="submit" id="otp-btn" class="btn btn-primary btn-lg btn-block"><span>Verify</span></button>
+          <div class="divider">OR</div>
+          <button type="button" id="restart-btn" class="btn btn-lg btn-block"><span>Start over</span></button>
+        </form>
 
-      <p id="form-error" class="form-error" role="alert" hidden></p>
-    </article>
-  </main>
+        <p id="form-error" class="form-error" role="alert" hidden></p>
+
+        <p class="auth-alt">Just want to ask a question? <a href="/">Go to chat</a></p>
+      </div>
+    </main>
+
+    <footer class="auth-foot">
+      <span>Protected by two-factor authentication</span>
+    </footer>
+  </div>
 
   <script src="login.js"></script>
 </body>
-
 </html>

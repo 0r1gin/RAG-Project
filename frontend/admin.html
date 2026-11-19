@@ -1,88 +1,133 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Admin · doc-chat</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <title>Documents · doc-chat</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500&display=swap">
   <link rel="stylesheet" href="style.css">
   <script src="common.js"></script>
 </head>
-
 <body>
-  <header class="container app-header">
-    <nav>
-      <ul>
-        <li><strong>doc-chat</strong></li>
-        <li><small class="muted">admin</small></li>
-      </ul>
-      <ul>
-        <li><button id="theme-toggle" type="button" class="secondary outline small"></button></li>
-        <li><a href="/">Back to chat</a></li>
-        <li><button id="logout-btn" type="button" class="secondary outline small">Log out</button></li>
-      </ul>
+  <div class="shell">
+    <nav class="rail" aria-label="Main">
+      <a href="/" class="rail-logo" aria-label="doc-chat home" data-logo></a>
+      <div class="rail-group">
+        <a href="/" class="rail-btn" data-tip="New chat" aria-label="New chat">
+          <span data-icon="plus" data-size="20"></span>
+        </a>
+        <a href="/" class="rail-btn" data-tip="Ask" aria-label="Ask a question">
+          <span data-icon="chat" data-size="20"></span>
+        </a>
+        <a href="/admin.html" class="rail-btn active" data-tip="Documents" aria-label="Manage documents" aria-current="page">
+          <span data-icon="folder" data-size="20"></span>
+        </a>
+      </div>
+      <div class="rail-spacer"></div>
+      <div class="rail-group">
+        <button id="theme-toggle" type="button" class="rail-btn"></button>
+        <button id="logout-btn" type="button" class="rail-btn" data-tip="Sign out" aria-label="Sign out">
+          <span data-icon="logout" data-size="20"></span>
+        </button>
+      </div>
     </nav>
-  </header>
 
-  <main class="container admin">
-    <section class="stats" aria-label="Summary">
-      <article class="stat"><strong id="stat-docs">–</strong><small class="muted">Documents</small></article>
-      <article class="stat"><strong id="stat-chunks">–</strong><small class="muted">Chunks</small></article>
-      <article class="stat"><strong id="stat-size">–</strong><small class="muted">Total size</small></article>
-    </section>
+    <div class="page">
+      <main class="settings">
+        <header class="page-head">
+          <h1>Document library</h1>
+          <p>Manage the files your assistant reads before answering.</p>
+        </header>
 
-    <section>
-      <h2>Add documents</h2>
-      <label class="dropzone" id="dropzone">
-        <input type="file" id="file" accept=".pdf,.txt" multiple>
-        <strong>Drop files here or click to choose</strong>
-        <small class="muted">PDF or TXT, up to 5 MB each, up to 20 files at once</small>
-      </label>
+        <section class="group" aria-labelledby="g-overview">
+          <div class="group-head"><h2 id="g-overview" class="group-title">Overview</h2></div>
+          <div class="card">
+            <div class="row">
+              <span data-icon="file" data-size="18"></span>
+              <span class="row-label">Documents</span>
+              <span class="row-value"><strong id="stat-docs">–</strong></span>
+            </div>
+            <div class="row">
+              <span data-icon="layers" data-size="18"></span>
+              <span class="row-label">Indexed chunks</span>
+              <span class="row-value"><strong id="stat-chunks">–</strong></span>
+            </div>
+            <div class="row">
+              <span data-icon="database" data-size="18"></span>
+              <span class="row-label">Total size</span>
+              <span class="row-value"><strong id="stat-size">–</strong></span>
+            </div>
+          </div>
+        </section>
 
-      <div id="queue-panel" hidden>
-        <progress id="overall" value="0" max="1"></progress>
-        <ul id="queue" class="queue" aria-live="polite"></ul>
-        <button id="clear-finished" type="button" class="secondary outline small">Clear finished</button>
-      </div>
-    </section>
+        <section class="group" aria-labelledby="g-add">
+          <div class="group-head"><h2 id="g-add" class="group-title">Add documents</h2></div>
+          <label class="dropzone" id="dropzone">
+            <input type="file" id="file" accept=".pdf,.txt" multiple>
+            <span class="dz-icon"><span data-icon="upload" data-size="20"></span></span>
+            <span class="dz-title"><span>Click to upload</span> or drag and drop</span>
+            <span class="dz-sub">PDF or TXT · up to 5 MB each · up to 20 files at once</span>
+          </label>
 
-    <section>
-      <div class="list-head">
-        <h2>Documents</h2>
-        <input type="search" id="search" placeholder="Search by file name" aria-label="Search documents">
-      </div>
-      <figure>
-        <table>
-          <thead>
-            <tr>
-              <th>File</th>
-              <th>Chunks</th>
-              <th>Size</th>
-              <th>Uploaded</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="doc-rows"></tbody>
-        </table>
-      </figure>
-      <p id="empty-docs" class="muted" hidden>No documents yet. Add some above.</p>
-      <p id="no-match" class="muted" hidden>No files match your search.</p>
-    </section>
-  </main>
+          <div id="queue-panel" class="card" hidden>
+            <div class="queue-head">
+              <progress id="overall" class="progress" value="0" max="1"></progress>
+              <span id="queue-meta" class="meta"></span>
+              <button id="clear-finished" type="button" class="btn btn-sm"><span>Clear finished</span></button>
+            </div>
+            <ul id="queue" class="queue" aria-live="polite"></ul>
+          </div>
+        </section>
 
-  <dialog id="confirm-dialog">
-    <article>
-      <h3>Delete document?</h3>
+        <section class="group" aria-labelledby="g-docs">
+          <div class="group-head">
+            <h2 id="g-docs" class="group-title">Documents</h2>
+            <div class="search">
+              <span data-icon="search" data-size="16"></span>
+              <input type="search" id="search" class="input" placeholder="Search by file name" aria-label="Search documents">
+            </div>
+          </div>
+          <div class="card">
+            <table class="doc-table">
+              <thead>
+                <tr>
+                  <th>File</th>
+                  <th class="col-hide">Chunks</th>
+                  <th class="col-hide">Size</th>
+                  <th class="col-hide">Uploaded</th>
+                  <th><span class="sr-only">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody id="doc-rows"></tbody>
+            </table>
+            <div id="empty-docs" class="empty-state" hidden>
+              <span data-icon="folder" data-size="28"></span>
+              <span>No documents yet. Upload some above to get started.</span>
+            </div>
+            <div id="no-match" class="empty-state" hidden>
+              <span data-icon="search" data-size="28"></span>
+              <span>No files match your search.</span>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <dialog id="confirm-dialog" aria-labelledby="confirm-title">
+    <div class="dialog-body">
+      <div class="dialog-icon"><span data-icon="trash" data-size="20"></span></div>
+      <h3 id="confirm-title">Delete document?</h3>
       <p id="confirm-text"></p>
-      <footer>
-        <button type="button" class="secondary" id="confirm-cancel">Cancel</button>
-        <button type="button" class="danger" id="confirm-ok">Delete</button>
-      </footer>
-    </article>
+    </div>
+    <div class="dialog-foot">
+      <button type="button" class="btn" id="confirm-cancel"><span>Cancel</span></button>
+      <button type="button" class="btn btn-danger" id="confirm-ok"><span>Delete</span></button>
+    </div>
   </dialog>
 
   <script src="admin.js"></script>
 </body>
-
 </html>
