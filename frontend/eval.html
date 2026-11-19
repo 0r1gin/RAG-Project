@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Evaluation · doc-chat</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500&display=swap">
+  <link rel="stylesheet" href="style.css">
+  <script src="common.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <nav class="rail" aria-label="Main">
+      <a href="/" class="rail-logo" aria-label="doc-chat home" data-logo></a>
+      <div class="rail-group">
+        <a href="/" class="rail-btn" data-tip="New chat" aria-label="New chat">
+          <span data-icon="plus" data-size="20"></span>
+        </a>
+        <a href="/" class="rail-btn" data-tip="Ask" aria-label="Ask a question">
+          <span data-icon="chat" data-size="20"></span>
+        </a>
+        <a href="/admin.html" class="rail-btn" data-tip="Documents" aria-label="Manage documents">
+          <span data-icon="folder" data-size="20"></span>
+        </a>
+        <a href="/eval.html" class="rail-btn active" data-tip="Evaluation" aria-label="Evaluation dashboard" aria-current="page">
+          <span data-icon="chart" data-size="20"></span>
+        </a>
+      </div>
+      <div class="rail-spacer"></div>
+      <div class="rail-group">
+        <button id="theme-toggle" type="button" class="rail-btn"></button>
+        <button id="logout-btn" type="button" class="rail-btn" data-tip="Sign out" aria-label="Sign out">
+          <span data-icon="logout" data-size="20"></span>
+        </button>
+      </div>
+    </nav>
+
+    <div class="page">
+      <main class="settings wide">
+        <header class="page-head">
+          <h1>Evaluation</h1>
+          <p>Test how accurately the assistant answers. Run a question set, compare retrieval modes and track the score over time.</p>
+        </header>
+
+        <!-- 1. Latest result at a glance -->
+        <section class="group" aria-labelledby="g-overview">
+          <div class="group-head">
+            <h2 id="g-overview" class="group-title">Showing</h2>
+            <span id="showing" class="muted small-text">No runs yet</span>
+          </div>
+          <div class="kpis">
+            <div class="kpi"><span class="kpi-label"><span data-icon="target" data-size="15"></span>Answer score</span><strong id="kpi-score">–</strong><small id="kpi-score-sub">weighted by priority</small></div>
+            <div class="kpi"><span class="kpi-label"><span data-icon="trend" data-size="15"></span>MRR</span><strong id="kpi-mrr">–</strong><small>1.00 = evidence always ranked first</small></div>
+            <div class="kpi"><span class="kpi-label"><span data-icon="search" data-size="15"></span>Evidence found</span><strong id="kpi-hit">–</strong><small>in the 3 passages Claude sees</small></div>
+            <div class="kpi"><span class="kpi-label"><span data-icon="clock" data-size="15"></span>Retrieval time</span><strong id="kpi-ms">–</strong><small>average per question</small></div>
+          </div>
+        </section>
+
+        <!-- 2. Charts -->
+        <section class="group" aria-labelledby="g-charts">
+          <div class="group-head"><h2 id="g-charts" class="group-title">Charts</h2></div>
+          <div class="chart-grid">
+            <figure class="card chart-card">
+              <figcaption>Mode comparison <small>selected run</small></figcaption>
+              <div class="chart-box"><canvas id="chart-modes" aria-label="Score, evidence found and MRR for each retrieval mode" role="img"></canvas></div>
+            </figure>
+            <figure class="card chart-card">
+              <figcaption>Results per mode <small>selected run</small></figcaption>
+              <div class="chart-box"><canvas id="chart-breakdown" aria-label="Pass, conflict and fail counts for each mode" role="img"></canvas></div>
+            </figure>
+            <figure class="card chart-card span-2">
+              <figcaption>Score history <small>production mode, recent runs</small></figcaption>
+              <div class="chart-box"><canvas id="chart-history" aria-label="Answer score and MRR over recent runs" role="img"></canvas></div>
+            </figure>
+          </div>
+          <p id="charts-empty" class="empty-note" hidden>Charts appear after your first run.</p>
+        </section>
+
+        <!-- 3. Run -->
+        <section class="group" aria-labelledby="g-run">
+          <div class="group-head"><h2 id="g-run" class="group-title">Run an evaluation</h2></div>
+          <form id="run-form" class="card form-card">
+            <label class="field">
+              <span class="field-label">Question set</span>
+              <select id="run-dataset" class="input"></select>
+            </label>
+            <fieldset class="field">
+              <legend class="field-label">Retrieval modes</legend>
+              <div id="run-modes" class="check-grid"></div>
+            </fieldset>
+            <div class="toggles">
+              <label class="toggle"><input type="checkbox" id="run-retrieval-only"><span class="switch" aria-hidden="true"></span>
+                <span><strong>Retrieval only</strong><small>Free and fast. Checks the passages, skips Claude.</small></span></label>
+              <label class="toggle"><input type="checkbox" id="run-judge"><span class="switch" aria-hidden="true"></span>
+                <span><strong>LLM judge</strong><small>Claude double-checks each passing answer.</small></span></label>
+            </div>
+            <div class="run-foot">
+              <span id="run-cost" class="cost-note"></span>
+              <button type="submit" id="run-btn" class="btn btn-primary"><span data-icon="play" data-size="15"></span><span>Run evaluation</span></button>
+            </div>
+            <div id="run-progress" class="run-progress" hidden>
+              <progress id="run-bar" class="progress" value="0" max="1"></progress>
+              <span id="run-status" class="muted"></span>
+            </div>
+          </form>
+        </section>
+
+        <!-- 4. Results -->
+        <section class="group" aria-labelledby="g-results">
+          <div class="group-head"><h2 id="g-results" class="group-title">Results by mode</h2></div>
+          <div class="card table-scroll">
+            <table class="doc-table" id="summary-table">
+              <thead><tr><th>Mode</th><th>Score</th><th>Points</th><th>Evidence@3</th><th>Recall@10</th><th>MRR</th><th>ms</th></tr></thead>
+              <tbody></tbody>
+            </table>
+            <div id="summary-empty" class="empty-state"><span data-icon="chart" data-size="28"></span><span>Run an evaluation to see results.</span></div>
+          </div>
+
+          <div class="group-head spaced"><h2 class="group-title">Results by question</h2><span class="muted small-text">Click a row for answers and passages</span></div>
+          <div class="card table-scroll">
+            <table class="doc-table clickable" id="question-table">
+              <thead><tr></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- 5. Question sets -->
+        <section class="group" aria-labelledby="g-sets">
+          <div class="group-head">
+            <h2 id="g-sets" class="group-title">Question sets</h2>
+            <button type="button" id="template-btn" class="btn btn-sm"><span data-icon="download" data-size="15"></span><span>CSV template</span></button>
+          </div>
+          <label class="dropzone compact" id="set-drop">
+            <input type="file" id="set-file" accept=".csv,.json">
+            <span class="dz-icon"><span data-icon="upload" data-size="20"></span></span>
+            <span class="dz-title"><span>Upload a question set</span> or drag it here</span>
+            <span class="dz-sub">CSV or JSON · up to 100 questions · see the template for the columns</span>
+          </label>
+          <div class="card table-scroll" style="margin-top:.9rem">
+            <table class="doc-table" id="set-table">
+              <thead><tr><th>Name</th><th>Questions</th><th class="col-hide">Uploaded</th><th><span class="sr-only">Actions</span></th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- 6. History -->
+        <section class="group" aria-labelledby="g-history">
+          <div class="group-head"><h2 id="g-history" class="group-title">Run history</h2><span class="muted small-text">Click a run to show it above</span></div>
+          <div class="card table-scroll">
+            <table class="doc-table clickable" id="history-table">
+              <thead><tr><th>Started</th><th>Question set</th><th class="col-hide">Modes</th><th>Score</th><th>MRR</th><th>Status</th></tr></thead>
+              <tbody></tbody>
+            </table>
+            <div id="history-empty" class="empty-state" hidden><span data-icon="clock" data-size="28"></span><span>No runs yet.</span></div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <dialog id="detail-dialog" class="wide-dialog" aria-labelledby="detail-title">
+    <div class="dialog-body">
+      <h3 id="detail-title"></h3>
+      <p id="detail-sub"></p>
+      <div id="detail-body" class="detail-list"></div>
+    </div>
+    <div class="dialog-foot"><button type="button" class="btn" id="detail-close"><span>Close</span></button></div>
+  </dialog>
+
+  <dialog id="confirm-dialog" aria-labelledby="confirm-title">
+    <div class="dialog-body">
+      <div class="dialog-icon"><span data-icon="trash" data-size="20"></span></div>
+      <h3 id="confirm-title">Delete question set?</h3>
+      <p id="confirm-text"></p>
+    </div>
+    <div class="dialog-foot">
+      <button type="button" class="btn" id="confirm-cancel"><span>Cancel</span></button>
+      <button type="button" class="btn btn-danger" id="confirm-ok"><span>Delete</span></button>
+    </div>
+  </dialog>
+
+  <!-- Pinned version. Without it the page still works, just without charts. -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="eval.js"></script>
+</body>
+</html>

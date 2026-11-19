@@ -1,184 +1,256 @@
 # doc-chat: Chat With Your Documents
 
-A Retrieval-Augmented Generation (RAG) web app. An admin uploads PDF and text files through a protected panel, the app splits them into passages and indexes them, and visitors ask questions in a chat page. Claude answers using only the retrieved passages and names the sources it used.
+Upload your PDF and text files, then ask questions about them in plain English. Claude answers **only from your documents** and tells you which file each answer came from. If the answer isn't in your files, it says so instead of guessing.
 
-> **Live demo:** _add your link here_  ·  **Screenshots:** _add `docs/chat.png` and `docs/admin.png`_
+An admin panel lets you manage the documents and **test how accurate the answers are**, with charts that track the score over time.
 
----
+> **Live demo:** _add your link here_ · **Screenshots:** _add `docs/chat.png`, `docs/admin.png` and `docs/eval.png`_
 
-## Features
-
-**Chat**
-- Question answering grounded in your documents, with source names
-- Markdown-formatted answers, sanitised before display
-- Suggestion chips, copy button, retry on error, light and dark mode
-- Status indicator that also wakes a sleeping free-tier server
-
-**Admin panel**
-- Drag-and-drop **multi-file upload** (up to 20 files at once, uploaded one at a time with per-file results)
-- Document list with search, stats (documents, chunks, total size) and a delete confirmation dialog
-- Deleting a document removes it from both the database **and** the search index
-
-**Storage**
-- Firestore is the source of truth for documents and chunks
-- The Chroma search index is rebuilt from Firestore at every server start, so free hosts that wipe their disk lose nothing
-
-**Security**
-- Password login with Argon2 hashing
-- Telegram bot one-time code as a second factor, sent to an account the backend determines
-- Short-lived signed session in an `HttpOnly`, `SameSite=Strict` cookie
-- Rate limiting, constant-time comparisons, input validation, no secrets in the repository
-
-**Quality**
-- Evaluation harness with synonym groups, priorities, forbidden phrases, contradiction checks and an optional LLM judge
+**Contents**
+- [Part 1: Using the app](#part-1-using-the-app): quick start, asking questions, managing documents, the evaluation dashboard
+- [Part 2: Understanding and changing the code](#part-2-understanding-and-changing-the-code): project structure, how it works, common changes
+- [Part 3: Reference](#part-3-reference): settings, API, security, deployment, troubleshooting
 
 ---
 
-## Architecture
+# Part 1: Using the app
 
-```
-                         ┌──────────────────────────────────────────────┐
- Browser                 │  FastAPI backend (src/)                      │
- ├─ chat page      ───►  │  POST /ask ──► Chroma (top 3 chunks) ──► Claude
- ├─ admin page     ───►  │  /api/admin/* (cookie required)              │
- └─ login page     ───►  │      ├─ upload ─► extract ─► chunk ─┬─► Firestore (source of truth)
-                         │      └─ delete ───────────────────  └─► Chroma    (search index)
-                         │  login ─► Argon2 ─► Telegram OTP ─► session cookie
-                         └──────────────────────────────────────────────┘
-                                      ▲
-                       server start: Firestore ─► rebuild Chroma
-```
+## Quick start
 
-**Why this design**
-
-| Decision | Reason |
-|---|---|
-| Firestore holds the data, Chroma is a rebuildable cache | Free hosts have ephemeral disks. Rebuilding on start keeps the app stateless |
-| Firestore only, no Cloud Storage | Cloud Storage for Firebase needs the paid Blaze plan; the app only needs the extracted text |
-| FastAPI serves the frontend itself | One deployment, no CORS setup, no separate static host |
-| Plain HTML, CSS and JavaScript with Pico CSS | No build step; everything is editable directly |
-| Files uploaded one at a time from the browser | Each file gets its own result, one bad PDF doesn't sink a batch, and requests stay short for free hosts |
-
----
-
-## Tech stack
-
-| Layer | Tools |
-|---|---|
-| Backend | Python 3.10+, FastAPI, Uvicorn |
-| Retrieval | ChromaDB (local embeddings), pypdf |
-| LLM | Anthropic Claude API |
-| Database | Firebase Firestore (Admin SDK) |
-| Auth | argon2-cffi, PyJWT, Telegram Bot API (via httpx) |
-| Frontend | HTML, CSS, vanilla JavaScript, Pico CSS, marked, DOMPurify |
-| Testing | Custom evaluation harness (`tests/eval.py`) |
-
----
-
-## Project structure
-
-```
-doc-chat/
-├── README.md
-├── requirements.txt
-├── .env                      # secrets (never committed)
-├── .gitignore
-├── serviceAccountKey.json    # Firebase key (never committed)
-├── data/                     # optional local seed documents
-├── chroma_db/                # generated search index (never committed)
-├── frontend/
-│   ├── index.html, app.js    # chat page
-│   ├── admin.html, admin.js  # admin panel
-│   ├── login.html, login.js  # two-step login
-│   ├── common.js             # theme toggle, toasts, helpers
-│   └── style.css             # theme and layout (edit the variables at the top)
-├── src/
-│   ├── api.py                # app setup, /ask, /health, serves frontend
-│   ├── query.py              # retrieve chunks, ask Claude
-│   ├── ingest.py             # chunking helpers (and a local-folder ingest script)
-│   ├── documents.py          # add, remove and rebuild documents
-│   ├── store.py              # all Firestore reads and writes
-│   ├── admin.py              # admin API routes
-│   ├── auth.py               # password check, session cookie, rate limiting
-│   ├── otp.py                # Telegram one-time codes
-│   ├── make_hash.py          # generates the admin password hash
-│   ├── link_telegram.py      # one-time Telegram chat-id lookup
-│   └── migrate_local.py      # optional: upload data/ files to Firestore
-└── tests/
-    └── eval.py               # scored evaluation questions
-```
-
----
-
-## Setup
-
-### Prerequisites
-
-- Python 3.10 or newer, and Git
-- An Anthropic API key (console.anthropic.com)
-- A Firebase project on the free Spark plan (console.firebase.google.com)
-- A Telegram account **with a public username** (Settings → Username)
-
-### 1. Clone and create a virtual environment
+You need **Python 3.10+**, an **Anthropic API key**, a free **Firebase** project and a **Telegram** account with a public username. The full setup (about 15 minutes) is in [Setup in detail](#setup-in-detail). In short:
 
 ```bash
 git clone https://github.com/YOUR-USERNAME/doc-chat.git
 cd doc-chat
 python -m venv .venv
+.venv\Scripts\activate            # macOS/Linux: source .venv/bin/activate
+pip install -r requirements.txt
+# create .env (see "Setup in detail"), then:
+uvicorn api:app --app-dir src --reload --port 8000
 ```
 
-| Shell | Activate |
-|---|---|
-| Windows cmd | `.venv\Scripts\activate.bat` |
-| Windows PowerShell | `.venv\Scripts\Activate.ps1` |
-| macOS / Linux | `source .venv/bin/activate` |
+Then open **http://localhost:8000**.
 
-> PowerShell "scripts disabled" error? Run `Set-ExecutionPolicy -Scope Process Bypass`, then activate again.
+| Page | Address | Who |
+|---|---|---|
+| Chat | `http://localhost:8000/` | anyone |
+| Admin sign-in | `http://localhost:8000/login.html` | admin |
+| Documents | `http://localhost:8000/admin.html` | admin |
+| Evaluation | `http://localhost:8000/eval.html` | admin |
+
+The first start downloads a small ranking model (~90 MB) once.
+
+## Asking questions
+
+1. Open the chat page.
+2. Type a question, or click one of the example questions, and press **Enter** (Shift+Enter adds a new line).
+3. The answer appears with the **source files** it used. **Copy** copies the answer.
+
+Each question is answered on its own; the app doesn't remember earlier questions. The badge in the top right shows whether the server is ready and how many passages are indexed.
+
+## Signing in as admin
+
+1. Go to `/login.html` and enter your username and password.
+2. A 6-digit code arrives in your Telegram. Type it in; it submits by itself.
+3. You stay signed in for 30 minutes. The **sign-out** icon at the bottom of the left bar ends the session.
+
+## Managing documents
+
+On the **Documents** page (folder icon):
+
+- **Add:** drop files on the upload area or click it. PDF or TXT, up to 5 MB each, up to 20 at once. Each file shows its own result.
+- **Find:** search by file name.
+- **Remove:** **Delete** on a row removes the file and everything indexed from it.
+
+A file with the same name as an existing one is skipped; delete the old one first to replace it. Scanned PDFs (pictures of text) can't be read without OCR.
+
+## Testing accuracy: the Evaluation dashboard
+
+The **Evaluation** page (chart icon) checks the assistant against a set of questions whose answers you know, and shows how well it did.
+
+### Run an evaluation
+
+1. Pick a **question set**. "Default questions" is built in; you can upload your own (below).
+2. Pick the **retrieval modes** to compare (explained below). The one marked **live** is what the chat page uses.
+3. Optional:
+   - **Retrieval only**: free and fast. It checks whether the right passages were found and skips Claude.
+   - **LLM judge**: Claude double-checks each passing answer for meaning, not just keywords.
+4. Check the cost note (for example "up to 24 Claude calls"), then press **Run evaluation**. A progress bar shows how far it has got. You can leave the page and come back.
+
+### Read the results
+
+| You see | It means |
+|---|---|
+| **Answer score** | Share of questions answered correctly, weighted by priority (critical = 3 points, high = 2, normal = 1) |
+| **Evidence found** | How often the passages given to Claude actually contained the answer |
+| **MRR** | How high the right passage ranks; 1.00 means it was always first |
+| **Retrieval time** | How long finding passages takes per question |
+| **PASS / CONFLICT / FAIL** | Correct / right words but wrong meaning (e.g. "I don't know", or "not X" when X is expected) / missing the expected words |
+
+- **Charts:** *Mode comparison* and *Results per mode* show the selected run; *Score history* shows the live mode across recent runs, so you can see whether a change helped or hurt.
+- **Results by question:** click a row to see each mode's answer, what was missing, and which passages Claude saw.
+- **Run history:** click any finished run to load it into the charts.
+
+### The retrieval modes
+
+| Mode | How passages are found | Speed |
+|---|---|---|
+| `vector` | by meaning only | fast |
+| `vector+rerank` | by meaning, then re-ordered by a ranking model | about 1 s slower |
+| `hybrid` | by meaning **and** by exact keywords, merged | fast |
+| `hybrid+rerank` (default) | meaning + keywords, then re-ordered | about 1 s slower |
+
+### Write your own question set
+
+Click **CSV template** on the Evaluation page, fill it in with a spreadsheet, and upload it (CSV or JSON, up to 100 questions).
+
+| Column | What to put | Example |
+|---|---|---|
+| `question` | the question | `What are the 2 kinds of loops?` |
+| `keywords` | words a correct answer must contain. Separate items with `;` and give alternatives with `\|` | `definite; indefinite` or `2\|two` |
+| `match` | `all` items needed, or `any` one | `all` |
+| `min_matches` | for "name a few" questions: at least this many items | `2` |
+| `priority` | `critical`, `high` or `normal` | `high` |
+| `forbidden` | phrases that make the answer wrong, separated by `;`. Leave blank to reject "I don't know"-style answers; write `none` to allow anything | |
+| `reference` | the correct answer in a sentence (used by the LLM judge) | `Definite and indefinite loops.` |
+| `context_keywords` | what the *passages* must contain, if different from the answer keywords | `main memory; secondary memory` |
+
+If a row has a problem, the upload names it, for example *"Row 4: priority: Input should be 'critical', 'high' or 'normal'"*.
+
+**Tip:** write questions about every document you upload. A question set that only covers one file can't tell you how well the others are handled.
+
+---
+
+# Part 2: Understanding and changing the code
+
+## Project structure
+
+```
+doc-chat/
+├── requirements.txt          everything to install (app + tests)
+├── .env                      your secrets (never committed)
+├── frontend/                 the web pages: plain HTML, CSS and JavaScript, no build step
+│   ├── index.html, app.js      chat page
+│   ├── login.html, login.js    two-step sign-in
+│   ├── admin.html, admin.js    documents page
+│   ├── eval.html, eval.js      evaluation dashboard (charts use Chart.js)
+│   ├── common.js               shared: theme, icons, notifications, admin API calls
+│   └── style.css               all styling; colours are variables at the top
+├── src/                      the Python backend (FastAPI)
+│   ├── api.py                  starts the app; /ask and /health; serves the frontend
+│   ├── query.py                finds passages for a question, then asks Claude
+│   ├── retrieval.py            the search building blocks: keyword search, merging, reranking
+│   ├── documents.py            reading, splitting and indexing uploaded files
+│   ├── store.py                every Firestore read and write
+│   ├── admin.py                all admin routes (documents and evaluation)
+│   ├── evaluation.py           scoring: grading answers, retrieval metrics, reading question sets
+│   ├── auth.py                 password check, session cookie, rate limiting
+│   ├── otp.py                  Telegram one-time codes
+│   └── cli.py                  terminal commands (setup helpers and the evaluation)
+└── tests/
+    ├── questions.json          the default evaluation questions
+    ├── test_retrieval.py       unit tests for search
+    └── test_evaluation.py      unit tests for scoring and question-set parsing
+```
+
+Generated and never committed: `chroma_db/` (search index), `.cache/` (ranking model), `.venv/`.
+
+## How it works
+
+```
+ Browser                       FastAPI backend (src/)
+ ├─ chat page  ── POST /ask ──► query.py: find passages ──► Claude ──► answer + sources
+ ├─ documents  ── /api/admin ─► documents.py: read ► split ► save (Firestore) + index (Chroma)
+ ├─ evaluation ── /api/admin ─► evaluation.py: run questions ► score ► save run (Firestore)
+ └─ sign-in    ── /api/admin ─► auth.py + otp.py: password ► Telegram code ► session cookie
+
+ On every start: Firestore ─► rebuild the Chroma search index
+```
+
+**Adding a document** (`documents.py`)
+1. The text is extracted (`pypdf` for PDFs) and split into overlapping chunks of about 400 words.
+2. The chunks are saved in **Firestore**, the permanent copy.
+3. They are added to **Chroma**, the search index. If that fails, the Firestore copy is removed so the two never disagree.
+
+**Answering a question** (`query.py`, using `retrieval.py`)
+1. **Meaning search:** Chroma finds the 20 chunks closest in meaning to the question.
+2. **Keyword search:** a BM25 index finds the 20 chunks that best match the exact words. It catches names, numbers and terms like `C#` that meaning search blurs.
+3. **Merge:** the two lists are combined by rank (reciprocal rank fusion).
+4. **Rerank:** a small local model (`ms-marco-MiniLM-L-6-v2`) reads the question with each of the top 10 chunks and re-orders them by how well they answer it.
+5. **Answer:** Claude gets the best 3 chunks and is told to answer only from them.
+
+**Why Firestore and Chroma?** Free hosts wipe their disk on restart. Firestore keeps the data safe; Chroma is rebuilt from it on every start.
+
+## Common changes
+
+| To change… | Edit | Notes |
+|---|---|---|
+| The Claude model | `MODEL` in `src/query.py` | |
+| How answers are worded | `build_prompt()` in `src/query.py` | re-run the evaluation afterwards |
+| The live retrieval mode | `RETRIEVAL_MODE` in `.env` | `vector`, `vector+rerank`, `hybrid` or `hybrid+rerank` |
+| Chunks sent to Claude | `N_RESULTS` in `src/retrieval.py` | default 3 |
+| Chunk size | `CHUNK_WORDS`, `OVERLAP_WORDS` in `src/documents.py` | re-upload documents afterwards |
+| Example questions on the chat page | `SUGGESTIONS` in `frontend/app.js` | |
+| Colours | variables at the top of `frontend/style.css` | light and dark sets |
+| Default evaluation questions | `tests/questions.json` | same fields as the CSV columns |
+| Upload limits | `MAX_BYTES` in `src/documents.py` **and** `frontend/admin.js` | keep them equal |
+
+**A good habit:** before and after any change to retrieval, prompts or chunking, run an evaluation and compare the score history.
+
+## Terminal commands
+
+All from the project root, with the virtual environment active:
 
 ```bash
-pip install -r requirements.txt
+python src/cli.py hash-password          # make the admin password hash for .env
+python src/cli.py link-telegram          # find your Telegram chat id for .env
+python src/cli.py upload-folder data     # upload every PDF/TXT in a folder (once; twice makes duplicates)
+
+python src/cli.py eval                   # evaluate every retrieval mode (uses Claude)
+python src/cli.py eval --retrieval-only  # free: retrieval metrics only
+python src/cli.py eval --modes hybrid+rerank --min-score 0.9   # exit code 1 if below 90%
+python src/cli.py eval --dataset my-questions.csv --json results.json
+
+pytest                                   # unit tests (no internet or API key needed)
 ```
 
-### 2. Set up Firebase
+`eval` exits with code 1 if a **critical** question fails, or if the score is under `--min-score`, so it can gate a CI pipeline. It reads the local search index, so start the server once first to build it.
 
-1. Create a project, then **Build → Firestore Database → Create database** (production mode).
-2. Under **Rules**, block all direct access and publish. Only the backend (Admin SDK, which bypasses rules) touches the database:
+---
+
+# Part 3: Reference
+
+## Setup in detail
+
+**1. Install** (see [Quick start](#quick-start)). If PowerShell says scripts are disabled, run `Set-ExecutionPolicy -Scope Process Bypass` and activate again.
+
+**2. Firebase**
+1. Create a project at console.firebase.google.com (the free Spark plan is enough), then **Build → Firestore Database → Create database**.
+2. Under **Rules**, block all direct access (only the backend uses the database):
    ```
    rules_version = '2';
    service cloud.firestore {
      match /databases/{database}/documents {
-       match /{document=**} {
-         allow read, write: if false;
-       }
+       match /{document=**} { allow read, write: if false; }
      }
    }
    ```
-3. **Project settings → Service accounts → Generate new private key.** Save the file as `serviceAccountKey.json` in the project root.
+3. **Project settings → Service accounts → Generate new private key.** Save it in the project root as `serviceAccountKey.json`.
 
-### 3. Generate the admin password hash and session secret
-
+**3. Admin password and session secret**
 ```bash
-python src/make_hash.py
+python src/cli.py hash-password
 python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
-### 4. Create the Telegram bot
+**4. Telegram bot**
+1. Message **@BotFather**, send `/newbot`, copy the token.
+2. Open your new bot and press **Start**.
+3. Fill in `.env` (next step), then run `python src/cli.py link-telegram` and add the `TELEGRAM_ADMIN_CHAT_ID=...` line it prints.
 
-1. In Telegram, message **@BotFather**, send `/newbot`, and copy the token.
-2. Open your new bot and press **Start**. A bot cannot message anyone who hasn't done this.
-3. Fill in `.env` (next step), then run the link script once:
-   ```bash
-   python src/link_telegram.py
-   ```
-   It prints a `TELEGRAM_ADMIN_CHAT_ID=...` line. Add it to `.env`.
-
-Why a script: Telegram bots can only message a numeric chat ID, not a `@handle`. The script finds the chat ID of whoever started the bot using the handle you configured, and the server re-checks at every start that the ID still belongs to that handle.
-
-### 5. Create `.env`
-
+**5. Create `.env`** in the project root:
 ```
 ANTHROPIC_API_KEY=sk-ant-...
-
 FIREBASE_KEY_PATH=serviceAccountKey.json
 
 ADMIN_USERNAME=choose-a-username
@@ -190,303 +262,128 @@ TELEGRAM_BOT_TOKEN=123456789:AAH-your-token
 ADMIN_TELEGRAM_HANDLE=your_telegram_username
 TELEGRAM_ADMIN_CHAT_ID=123456789
 ```
+Keep the single quotes around the hash (it contains `$`). No spaces around `=`. Restart the server after editing `.env`.
 
-Keep the single quotes around the hash locally (it contains `$` characters). No spaces around `=`.
+## Settings
 
-| Variable | Purpose |
-|---|---|
-| `ANTHROPIC_API_KEY` | Claude API access |
-| `FIREBASE_KEY_PATH` | Path to the service-account file (local development) |
-| `FIREBASE_CREDENTIALS_JSON` | Full contents of that file (use this on a host instead of the path) |
-| `ADMIN_USERNAME` | Admin login name |
-| `ADMIN_PASSWORD_HASH` | Argon2 hash from `make_hash.py` |
-| `JWT_SECRET` | Signs session tokens; 32+ characters |
-| `COOKIE_SECURE` | `true` on HTTPS hosts, `false` on `http://localhost` |
-| `TELEGRAM_BOT_TOKEN` | Bot token from BotFather |
-| `ADMIN_TELEGRAM_HANDLE` | The admin's Telegram username, without `@` |
-| `TELEGRAM_ADMIN_CHAT_ID` | Numeric chat ID from `link_telegram.py` |
+| Setting | Where | Default | Effect |
+|---|---|---|---|
+| `ANTHROPIC_API_KEY` | `.env` | | Claude access |
+| `FIREBASE_KEY_PATH` / `FIREBASE_CREDENTIALS_JSON` | `.env` | | key file path locally / whole key file on a host |
+| `ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH` | `.env` | | admin sign-in |
+| `JWT_SECRET` | `.env` | | signs sessions; 32+ characters |
+| `COOKIE_SECURE` | `.env` | `false` | `true` on HTTPS hosts |
+| `TELEGRAM_BOT_TOKEN`, `ADMIN_TELEGRAM_HANDLE`, `TELEGRAM_ADMIN_CHAT_ID` | `.env` | | second sign-in factor |
+| `RETRIEVAL_MODE` | `.env` | `hybrid+rerank` | how passages are found |
+| `RERANK_CANDIDATES` | `.env` | 10 | chunks the ranking model re-orders (~100 ms each on CPU) |
+| `RERANK_MODEL` | `.env` | `Xenova/ms-marco-MiniLM-L-6-v2` | any reranker `fastembed` supports |
+| `FASTEMBED_CACHE_PATH` | `.env` | `.cache/fastembed` | where the ranking model is stored |
+| `MODEL`, `max_tokens` | `src/query.py` | `claude-sonnet-5-5`, 1000 | Claude model and answer length |
+| `N_CANDIDATES` | `src/query.py` | 20 | chunks each search contributes before merging |
+| `TOKEN_MINUTES` | `src/auth.py` | 30 | session length |
+| `MAX_FAILURES`, `WINDOW_SECONDS` | `src/auth.py` | 5, 10 | failed sign-ins allowed per IP per window (raise the window in production, e.g. 900) |
+| `MAX_QUESTIONS` | `src/evaluation.py` | 100 | questions per uploaded set |
 
-The server refuses to start if any required admin or Telegram setting is missing, or if the chat ID no longer matches the handle.
-
-### 6. Run it
-
-```bash
-uvicorn api:app --app-dir src --reload --port 8000
-```
-
-Restart after changing `.env`, because `--reload` only watches Python files.
-
-| URL | What |
-|---|---|
-| `http://localhost:8000/` | Chat page |
-| `http://localhost:8000/login.html` | Admin login |
-| `http://localhost:8000/admin.html` | Admin panel (requires login) |
-| `http://localhost:8000/docs` | Interactive API documentation |
-| `http://localhost:8000/health` | Status and indexed chunk count |
-
-**Optional:** upload files you already have in `data/` to Firestore once (running it twice creates duplicates):
-
-```bash
-python src/migrate_local.py
-```
-
----
-
-## Usage
-
-### Asking questions
-
-Open the chat page, click a suggestion or type a question, and press Enter (Shift+Enter for a new line). Each question is answered on its own, with no memory of earlier ones. If the passages don't contain the answer, the app says so instead of guessing.
-
-### Managing documents
-
-1. Go to `/login.html`, enter your username and password, then the 6-digit code that arrives in Telegram.
-2. On the admin page, drop files onto the upload area or click to choose them. PDF and TXT only, up to 5 MB each, up to 20 per batch. Each file shows its own progress and result. Duplicates by name are skipped, so delete the old one first to replace it.
-3. Use **Delete** on any row to remove the document, its stored chunks and its search entries.
-4. Sessions last 30 minutes. **Log out** ends one immediately.
-
-Scanned PDFs without a text layer can't be indexed (they would need OCR first).
-
-### Local seed files
-
-`src/ingest.py` also still works as a script that indexes the `data/` folder straight into the local Chroma database. It's handy for quick experiments, but the web app's source of truth is Firestore.
-
----
-
-## How it works
-
-**Ingestion**
-1. The uploaded file is read in memory and its text is extracted (`pypdf` for PDFs).
-2. The text is split into overlapping chunks of about 400 words.
-3. The chunks are written to Firestore in batches, then the document's metadata is written last, so a failed upload never appears in the list.
-4. The chunks are added to Chroma, which creates embeddings. If that step fails, the Firestore write is rolled back.
-
-**Question answering**
-1. Chroma returns the 3 chunks closest in meaning to the question.
-2. Claude receives those chunks and the question with the instruction to answer only from them and to say so when the answer isn't there.
-3. The answer and the source file names go back to the browser.
-
-**Firestore data model**
-
-| Collection | Document id | Fields |
-|---|---|---|
-| `documents` | random id | `filename`, `size_bytes`, `chunk_count`, `uploaded_at` |
-| `chunks` | `<doc id>-<n>` | `doc_id`, `source`, `chunk`, `text` |
-
-**Startup:** the Chroma collection is emptied and refilled from `chunks`, so the index always matches Firestore.
-
-### API reference
+## API
 
 | Method and path | Auth | Purpose |
 |---|---|---|
-| `GET /health` | none | Status and chunk count |
-| `POST /ask` | none | `{question}` returns `{answer, sources}` (3 to 500 characters) |
-| `POST /api/admin/login` | none | Password check; sends a code to Telegram and returns a `challenge_id` |
-| `POST /api/admin/verify-otp` | none | `{challenge_id, code}`; sets the session cookie on success |
-| `POST /api/admin/logout` | none | Clears the session cookie |
-| `GET /api/admin/documents` | cookie | List documents |
-| `POST /api/admin/documents` | cookie | Upload one file (multipart) |
-| `DELETE /api/admin/documents/{id}` | cookie | Delete a document everywhere |
+| `GET /health` | none | status, chunk count, live retrieval mode |
+| `POST /ask` | none | `{question}` → `{answer, sources}` |
+| `POST /api/admin/login` | none | password; sends a Telegram code, returns `challenge_id` |
+| `POST /api/admin/verify-otp` | none | `{challenge_id, code}`; sets the session cookie |
+| `POST /api/admin/logout` | none | clears the session |
+| `GET /api/admin/session` | session | 200 if signed in as admin, else 401 (the chat page uses it to show admin-only links) |
+| `GET` / `POST /api/admin/documents` | session | list / upload one file |
+| `DELETE /api/admin/documents/{id}` | session | delete a document everywhere |
+| `GET` / `POST /api/admin/eval/datasets` | session | list / upload a question set |
+| `GET` / `DELETE /api/admin/eval/datasets/{id}` | session | preview / delete a question set |
+| `POST /api/admin/eval/runs` | session | `{dataset_id, modes, retrieval_only, judge}` → starts a run (one at a time) |
+| `GET /api/admin/eval/runs` | session | run history |
+| `GET /api/admin/eval/runs/{id}` | session | a run's progress and full results |
 
----
+Interactive docs: `http://localhost:8000/docs`.
+
+**Firestore collections:** `documents`, `chunks` (`<doc id>-<n>`), `eval_datasets`, `eval_runs`.
 
 ## Security
 
 | Control | Details |
 |---|---|
-| Password storage | Argon2id hash in an environment variable, never plain text. Wrong usernames take similar time to wrong passwords |
-| Second factor | 6-digit code via Telegram, valid for 5 minutes, single use, 5 attempts, 30 second resend cooldown |
-| Sessions | Signed JWT, 30 minute expiry, `HttpOnly` + `SameSite=Strict` cookie (`Secure` on HTTPS) |
-| Rate limiting | 5 failed attempts per IP in 15 minutes, counted across passwords **and** codes |
-| Authorisation | Every document route depends on a session check; a correct password alone grants nothing |
-| Database | Firestore rules deny all direct access; only the backend can read or write |
-| Input handling | Uploads limited to PDF/TXT and 5 MB, file names stripped to a base name, question length capped, answers sanitised with DOMPurify, file names inserted with `textContent` |
-| Secrets | `.env` and the Firebase key are gitignored. Telegram errors are rewritten so the bot token never reaches the logs |
+| Passwords | Argon2id hash in `.env`; wrong usernames take as long as wrong passwords |
+| Second factor | 6-digit Telegram code: 5 minutes, single use, 5 attempts, 30-second resend cooldown |
+| Sessions | signed JWT, 30 minutes, `HttpOnly` + `SameSite=Strict` cookie (`Secure` on HTTPS) |
+| Rate limiting | failed passwords **and** codes count together, per IP |
+| Authorisation | every document and evaluation route requires a session |
+| Database | Firestore rules deny all direct access; only the backend reads and writes |
+| Input | PDF/TXT only, 5 MB; question sets validated row by row; answers sanitised with DOMPurify; user text inserted with `textContent` |
+| Secrets | `.env` and the Firebase key are gitignored; Telegram errors never log the bot token |
 
-If a secret is ever committed, **revoke and regenerate it immediately**. Deleting the file later does not remove it from Git history.
-
----
-
-## Configuration
-
-| Setting | Where | Default | Effect |
-|---|---|---|---|
-| `CHUNK_WORDS` / `OVERLAP_WORDS` | `src/ingest.py` | 400 / 50 | Chunk size and overlap |
-| `N_RESULTS` | `src/query.py` | 3 | Chunks retrieved per question |
-| `MODEL` | `src/query.py` | `claude-sonnet-5-5` | Claude model; check current names at docs.claude.com |
-| `max_tokens` | `src/query.py` | 3000 | Answer limit (thinking tokens count toward it) |
-| `MAX_BYTES` | `src/documents.py` | 5 MB | Per-file upload limit (keep `admin.js` in sync) |
-| `MAX_FILES`, `MAX_BYTES` | `frontend/admin.js` | 20, 5 MB | Batch limits in the browser |
-| `TOKEN_MINUTES` | `src/auth.py` | 30 | Session length |
-| `MAX_FAILURES`, `WINDOW_SECONDS` | `src/auth.py` | 5, 900 | Login rate limit |
-| `OTP_TTL_SECONDS`, `MAX_ATTEMPTS`, `RESEND_COOLDOWN_SECONDS` | `src/otp.py` | 300, 5, 30 | One-time code rules |
-| `SUGGESTIONS` | `frontend/app.js` | sample questions | Chips on the chat page |
-| Accent colours | top of `frontend/style.css` | indigo | Site-wide theme |
-
-After changing chunk settings, re-upload your documents so existing chunks are rebuilt with the new size.
-
----
-
-## Evaluation
-
-`tests/eval.py` runs a list of questions through the real pipeline and scores each answer.
-
-| Option | Effect |
-|---|---|
-| `keywords` | Strings, or lists of synonyms (`["2", "two"]`), matched as whole words |
-| `match` | `all` keywords required, `any` one is enough |
-| `min_matches` | At least N keywords (for "name a few" questions) |
-| `priority` | `critical` (3 points), `high` (2), `normal` (1), giving a weighted score |
-| `forbidden` | Phrases that mark an answer wrong, such as "I don't know" |
-| `patterns` | Regexes the answer must match |
-| `stance` | `affirm` or `negate`; flags answers that contain the keywords but say the opposite |
-| `reference` | Plain-English correct answer, used by the optional LLM judge |
-| `JUDGE_MODE = "on_pass"` | Has Claude double-check passing answers for meaning |
-
-Statuses: `PASS`, `FAIL` (keywords missing) and `CONFLICT` (keywords present but the meaning looks wrong). A failing `critical` test makes the script exit with a non-zero code, ready for CI.
-
-```bash
-python tests/eval.py
-```
-
-The evaluation reads the **local** Chroma index. Start the server once first (it rebuilds the index from Firestore), or add `import documents; documents.rebuild_index()` at the top of `eval.py`.
-
-### Results log
-
-| Date | Chunk words | Results | Weighted score | Notes |
-|---|---|---|---|---|
-| YYYY-MM-DD | 400 | 3 | _/_ | baseline |
-
----
+If a secret is ever committed, **revoke and regenerate it immediately**; deleting the file doesn't remove it from Git history.
 
 ## Deployment
 
-The backend serves the frontend, so one free Python web service is enough.
+The backend serves the frontend, so one Python web service is enough. **Render example:**
+- Build: `pip install -r requirements.txt`
+- Start: `uvicorn api:app --app-dir src --host 0.0.0.0 --port $PORT`
+- Environment: the `.env` values, but use `FIREBASE_CREDENTIALS_JSON` (whole key file) instead of `FIREBASE_KEY_PATH`, paste `ADMIN_PASSWORD_HASH` **without** quotes, and set `COOKIE_SECURE=true`.
 
-**Render example**
-- Build command: `pip install -r requirements.txt`
-- Start command: `uvicorn api:app --app-dir src --host 0.0.0.0 --port $PORT`
-- Environment variables: the table above, with these differences:
-  - Use `FIREBASE_CREDENTIALS_JSON` (the whole key file) instead of `FIREBASE_KEY_PATH`
-  - Paste `ADMIN_PASSWORD_HASH` raw, with no quotes
-  - Set `COOKIE_SECURE=true`
-
-**Free-tier realities**
-- Free instances sleep after inactivity and take a while to wake. The chat page shows a "server may be waking up" message and pings `/health` on load.
-- Every start re-reads all chunks from Firestore. Free Firestore has daily read, write and storage limits (check Firebase's current pricing page), so keep the document set modest.
-- Run a **single** server process. One-time-code and rate-limit state is kept in memory.
-
-After deploying, test the live site end to end: ask a question, log in with a code, upload a document, delete it. If the session doesn't stick, check `COOKIE_SECURE` and that the site is served over HTTPS.
-
----
-
-## Git workflow
-
-`main` holds the last working version. Each feature is built on its own branch, tested, then merged through a Pull Request.
-
-| Branch | Adds |
-|---|---|
-| `feature/web-ui` | FastAPI backend and the first Pico CSS frontend |
-| `feature/firebase-storage` | Firestore storage, admin upload and delete |
-| `feature/ui-polish` | Redesigned chat and admin pages, multi-file upload |
-| `feature/admin-auth` | Admin login with Argon2 and cookie sessions |
-| `feature/telegram-otp` | Telegram one-time code as a second factor |
-
-**Starting a feature**
-
-```bash
-git checkout main
-git pull
-git checkout -b feature/my-feature
-# ...work...
-git add .
-git status            # .env, .venv, chroma_db and serviceAccountKey.json must NOT be listed
-git commit -m "Describe the change"
-git push -u origin feature/my-feature
-```
-
-Then open a Pull Request, review **Files changed** for secrets, merge, and clean up:
-
-```bash
-git checkout main
-git pull
-git branch -d feature/my-feature
-git tag v0.4-my-feature && git push origin v0.4-my-feature
-```
-
-**Useful commands**
-
-| Task | Command |
-|---|---|
-| History as a graph | `git log --oneline --graph --all` |
-| Which branches contain a file's history | `git log --all --oneline -- path/to/file` |
-| Save a bookmark before risky work | `git branch backup/before-cleanup` |
-| Stash unfinished work | `git stash`, later `git stash pop` |
-| Cancel a merge in progress | `git merge --abort` |
-| During a merge, take the incoming side of a file | `git checkout MERGE_HEAD -- path` |
-| Compare with a backup branch | `git diff backup/before-cleanup -- frontend` |
-
-**Shell differences on Windows:** `Select-String` exists only in PowerShell; in cmd use `findstr /C:"text" file`. `git`, `python`, `pip` and `uvicorn` behave identically in both.
-
----
+Things to know on free tiers:
+- Instances sleep and take a while to wake; the chat page says so.
+- Every start re-reads all chunks from Firestore, and free Firestore has daily limits, so keep the document set modest.
+- Run **one** server process: sign-in codes, rate limits and the "one evaluation at a time" lock live in memory.
+- The ranking model is downloaded on first start (~90 MB). If that fails, the server falls back to `hybrid` and logs why.
 
 ## Troubleshooting
 
 | Problem | Fix |
 |---|---|
-| `python` not found | Use `python3`, or reinstall with "Add to PATH" ticked |
-| `(.venv)` missing from the prompt | Re-run the activate command |
-| `ModuleNotFoundError` | Activate the venv, then `pip install -r requirements.txt` |
-| `401 authentication_error` from Claude | Check `ANTHROPIC_API_KEY`; also look for a conflicting `ANTHROPIC_AUTH_TOKEN` or stale variable in your system environment |
-| `'ThinkingBlock' has no attribute 'text'` | Join only blocks where `block.type == "text"` (already done in `query.py`) |
-| `Directory '...\frontend' does not exist` | Create the `frontend/` folder with its files, and start Uvicorn from the project root |
-| Server won't start: "Set ADMIN_USERNAME…" | A variable is missing from `.env` |
-| Server won't start: "does not belong to…" | The Telegram handle and chat ID disagree; re-run `src/link_telegram.py` |
-| No Telegram code arrives | Press **Start** in the bot chat; check the token and chat ID; look for a `Telegram error:` line in the terminal |
-| `link_telegram.py` finds nothing | Send the bot a fresh message, run it again, and check your public Telegram username matches `.env` |
-| "Please wait 30 seconds" | Resend cooldown; wait, or restart the server while testing |
-| `429 Too many failed attempts` | Per-IP limit; restart locally, or wait 15 minutes |
-| Always "Invalid username or password" | The hash was truncated, or lost its single quotes in a local `.env` |
-| Logged out immediately on the live site | `COOKIE_SECURE=true` on plain `http://`, or the site isn't on HTTPS |
-| Codes work locally but fail when deployed | The host runs several workers or instances; use one process |
-| Empty answers from a PDF | It's probably scanned images; OCR it first |
-| Answers say "I don't know" | Check `/health` for a non-zero chunk count, then try `N_RESULTS = 5` or smaller chunks |
-| Page looks unstyled or old | Hard refresh (`Ctrl+Shift+R`); check the Pico CDN link loads |
-
----
+| `ModuleNotFoundError` | activate the venv, then `pip install -r requirements.txt` |
+| `401 authentication_error` from Claude | check `ANTHROPIC_API_KEY`, and look for a conflicting `ANTHROPIC_AUTH_TOKEN` in your environment |
+| Server won't start: "Set ADMIN_USERNAME…" | a variable is missing from `.env` |
+| Server won't start: "does not belong to…" | Telegram handle and chat id disagree; run `python src/cli.py link-telegram` |
+| No Telegram code arrives | press **Start** in the bot chat; check the token and chat id; look for `Telegram error:` in the terminal |
+| Always "Invalid username or password" | the hash is wrong or lost its quotes. Check it with a fresh `hash-password`, and watch for browser autofill |
+| "Too many failed attempts" | wait for the rate-limit window, or restart the server locally |
+| Logged out at once on the live site | `COOKIE_SECURE=true` without HTTPS |
+| Answers say "I don't know" | check `/health` shows chunks, then run an evaluation to see whether retrieval found the evidence |
+| "Reranker unavailable" in the log | no internet on first start; the app runs in `hybrid` mode until the model downloads |
+| Evaluation says "already running" | only one run at a time; wait, or restart the server (the old run is marked failed) |
+| Charts don't appear | the Chart.js CDN is blocked; the tables still work |
+| Page looks old after an update | hard refresh with `Ctrl+Shift+R` |
 
 ## Known limitations
 
-- One-time-code and rate-limit state live in memory, so they require a single server process. A restart between the password and the code invalidates the code.
-- Telegram bot chats are not end-to-end encrypted. This is a solid second factor, but an authenticator-app code (TOTP) would be stronger.
-- The rate limit is per IP; behind several proxies the address read from `X-Forwarded-For` may be a proxy's.
-- There is a single admin account and no roles.
-- Questions are answered independently; there is no conversation memory.
-- Only text-based PDF and TXT files are supported.
-- Original files are not kept, only the extracted text.
-
----
+- Sign-in codes, rate limits and the evaluation lock live in memory, so they need a single server process.
+- Telegram chats aren't end-to-end encrypted; an authenticator app (TOTP) would be a stronger second factor.
+- One admin account, no roles. Questions are answered independently (no conversation memory).
+- Only text-based PDF and TXT files; original files aren't kept, only their text.
+- Evaluation checks answers with keywords (plus an optional LLM judge), so a correct answer worded unusually can be marked FAIL. Read the answers when a score drops.
 
 ## Roadmap
 
 - [x] RAG pipeline with Chroma and Claude
-- [x] Evaluation harness with priorities, synonyms and contradiction checks
-- [x] FastAPI backend and web frontend
-- [x] Firestore storage with admin upload and delete
-- [x] Multi-file upload and polished UI
-- [x] Admin login with Argon2 and cookie sessions
-- [x] Telegram one-time-code second factor
-- [ ] Streaming answers (Server-Sent Events)
-- [ ] Hybrid search (keyword plus vector) with reranking, measured with the eval score
-- [ ] GitHub Actions pipeline that fails when the eval score drops
-- [ ] Source passages shown and highlighted next to answers
-- [ ] Thumbs up/down feedback and a "questions I couldn't answer" admin view
-- [ ] Audit log of admin actions
-- [ ] TOTP authenticator option
-- [ ] Docker setup and automated tests with mocked Firestore and Claude
-- [ ] More file types (DOCX, HTML, web URLs) and OCR for scanned PDFs
+- [x] Firestore storage, admin upload and delete, polished UI
+- [x] Admin sign-in with Argon2, cookie sessions and a Telegram second factor
+- [x] Hybrid search (keyword plus vector) with reranking, measured with the evaluation score
+- [x] Evaluation dashboard with uploadable question sets, charts and run history
+- [ ] GitHub Actions pipeline: lint, unit tests and evaluation on every pull request
+- [ ] Streaming answers
+- [ ] Source passages shown next to answers
+- [ ] Thumbs up/down feedback and a "questions I couldn't answer" view
+- [ ] TOTP authenticator option, audit log
+- [ ] More file types (DOCX, HTML, URLs) and OCR for scanned PDFs
 
----
+## Contributing (Git workflow)
+
+Each feature gets its own branch, is tested, then merged through a Pull Request:
+
+```bash
+git checkout -b feature/my-feature
+git add . && git status     # .env, .venv, chroma_db and the Firebase key must NOT be listed
+git commit -m "Describe the change"
+git push -u origin feature/my-feature
+```
 
 ## License
 

@@ -36,6 +36,12 @@ const ICONS = {
   clock: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2",
   alert: "M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z",
   send: "M22 2 11 13M22 2l-7 20-4-9-9-4z",
+  chart: "M3 3v18h18M8 17v-5M13 17V8M18 17v-9",
+  play: "M7 4v16l13-8z",
+  target: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12 12h.01",
+  trend: "M3 17l6-6 4 4 8-8M15 7h6v6",
+  download: "M12 3v12M7 10l5 5 5-5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4",
+  eye: "M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
 };
 
 function iconSvg(name, size = 18) {
@@ -118,6 +124,41 @@ function toast(message, type = "info", ms = 4000) {
     el.classList.add("leaving");
     setTimeout(() => el.remove(), 200);
   }, ms);
+}
+
+// ---------- admin API (used by admin.js and eval.js) ----------
+// Calls /api/admin/<path>. A 401 means the session ended, so go to the login page.
+async function api(path, options = {}) {
+  const res = await fetch(`/api/admin${path}`, options);
+  if (res.status === 401) {
+    window.location.href = "/login.html";
+    throw new Error("Not logged in");
+  }
+  if (!res.ok) {
+    let detail = `Error ${res.status}`;
+    try {
+      const body = await res.json();
+      if (typeof body.detail === "string") detail = body.detail;
+    } catch {}
+    throw new Error(detail);
+  }
+  return res.json();
+}
+
+// Sign out from any admin page: a full-screen notice, then back to the login page.
+function initLogout(button) {
+  button.addEventListener("click", async () => {
+    const splash = document.createElement("div");
+    splash.className = "splash";
+    splash.setAttribute("role", "status");
+    splash.innerHTML =   // static markup, no user data
+      `<div class="splash-inner"><div class="mark">${LOGO_SVG}</div>` +
+      `<p>Signing you out…</p>` +
+      `<small>If you aren't signed out, <a href="/login.html">click here</a></small></div>`;
+    document.body.append(splash);
+    try { await fetch("/api/admin/logout", { method: "POST" }); } catch {}
+    window.location.href = "/login.html";
+  });
 }
 
 // ---------- busy state for buttons ----------

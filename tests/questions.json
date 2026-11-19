@@ -1,0 +1,53 @@
+[
+  {
+    "question": "What is the main processor in a computer",
+    "keywords": [["cpu", "central processing unit", "processor"]],
+    "match": "any",
+    "priority": "critical",
+    "reference": "The main processor is the CPU (central processing unit)."
+  },
+  {
+    "question": "How many memory components exists in a computer?",
+    "keywords": [["2", "two"]],
+    "match": "any",
+    "context_keywords": ["main memory", "secondary memory"],
+    "priority": "high",
+    "reference": "A computer has 2 memory components: main memory and secondary memory."
+  },
+  {
+    "question": "What does assembly language use?",
+    "keywords": ["mnemonics", ["binary code", "binary", "machine code"]],
+    "match": "all",
+    "priority": "high",
+    "reference": "Assembly language uses mnemonics and binary code."
+  },
+  {
+    "question": "What are the 2 kinds of loops",
+    "keywords": [
+      ["definite", "definite loop", "definite loops"],
+      ["indefinite", "indefinite loop", "indefinite loops"]
+    ],
+    "match": "all",
+    "priority": "high",
+    "reference": "The two kinds of loops are definite loops and indefinite loops."
+  },
+  {
+    "question": "List a few high level languages",
+    "keywords": ["JavaScript", "Java", "C#", "PHP", "Python"],
+    "match": "any",
+    "min_matches": 2,
+    "priority": "normal",
+    "reference": "High level languages include JavaScript, Java, C#, PHP and Python."
+  },
+  {
+    "question": "What are decision structures",
+    "keywords": [
+      ["decision", "decisions"],
+      ["statement", "statements"],
+      ["executed", "execute", "executes", "run"]
+    ],
+    "match": "all",
+    "priority": "normal",
+    "reference": "Decision structures are about decisions, specifically whether statements in a program are executed, such as whether to compute a discount on a payment."
+  }
+]

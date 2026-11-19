@@ -9,3 +9,5 @@ python-multipart
 argon2-cffi
 PyJWT
 httpx
+fastembed
+pytest

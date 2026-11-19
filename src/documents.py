@@ -5,11 +5,19 @@ import uuid
 from pypdf import PdfReader
 
 import store
-from ingest import chunk_text
-from query import collection
+from query import collection, keyword_index
 
 ALLOWED_EXTENSIONS = {".pdf", ".txt"}
 MAX_BYTES = 5 * 1024 * 1024   # 5 MB
+CHUNK_WORDS = 400             # words per chunk
+OVERLAP_WORDS = 50            # words shared by neighbouring chunks, so no sentence is lost at a cut
+
+
+def chunk_text(text: str) -> list[str]:
+    """Split text into overlapping chunks of roughly CHUNK_WORDS words."""
+    words = text.split()
+    step = CHUNK_WORDS - OVERLAP_WORDS
+    return [" ".join(words[start:start + CHUNK_WORDS]) for start in range(0, len(words), step)]
 
 
 def extract_text(filename: str, data: bytes) -> str:
@@ -25,6 +33,7 @@ def _index(doc_id: str, filename: str, chunks: list[str]):
         ids=[f"{doc_id}-{i}" for i in range(len(chunks))],
         metadatas=[{"doc_id": doc_id, "source": filename, "chunk": i} for i in range(len(chunks))],
     )
+    keyword_index.invalidate()
 
 
 def add_document(filename: str, data: bytes) -> dict:
@@ -53,6 +62,7 @@ def add_document(filename: str, data: bytes) -> dict:
 def remove_document(doc_id: str) -> bool:
     found = store.delete_document(doc_id)
     collection.delete(where={"doc_id": doc_id})
+    keyword_index.invalidate()
     return found
 
 
@@ -70,4 +80,5 @@ def rebuild_index() -> int:
 
     for i in range(0, len(ids), 500):
         collection.upsert(ids=ids[i:i + 500], documents=texts[i:i + 500], metadatas=metas[i:i + 500])
+    keyword_index.invalidate()
     return len(ids)

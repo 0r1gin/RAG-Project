@@ -244,6 +244,24 @@ $("new-chat").addEventListener("click", () => {
 $("focus-input").addEventListener("click", () => input.focus());
 onInput();
 
+// ---------- admin-only links ----------
+// The session cookie is HttpOnly, so ask the server. Uses fetch, not api(): a 401 here is normal for
+// visitors and must not redirect them to the login page.
+async function showAdminLinks() {
+  const link = $("eval-link");
+  if (!link) return;   // an old cached index.html without the link
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/session`, { cache: "no-store", credentials: "same-origin" });
+    link.hidden = !res.ok;
+  } catch {
+    link.hidden = true;
+  }
+}
+showAdminLinks();
+// Coming back with the Back button restores the page from memory without re-running scripts,
+// so check again (e.g. after signing in or out on another page).
+window.addEventListener("pageshow", (e) => { if (e.persisted) showAdminLinks(); });
+
 // ---------- server status (also warms up a sleeping free host) ----------
 (async function checkServer() {
   const addBtn = statusPill.querySelector(".btn");

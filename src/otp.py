@@ -18,7 +18,7 @@ except ValueError:
 if not (BOT_TOKEN and HANDLE and CHAT_ID):
     raise RuntimeError(
         "Set TELEGRAM_BOT_TOKEN, ADMIN_TELEGRAM_HANDLE and TELEGRAM_ADMIN_CHAT_ID in .env "
-        "(run src/link_telegram.py to get the chat id)"
+        "(run: python src/cli.py link-telegram)"
     )
 
 OTP_TTL_SECONDS = 300
@@ -58,7 +58,7 @@ def verify_link():
     if (chat.get("username") or "").lower() != HANDLE:
         raise RuntimeError(
             "TELEGRAM_ADMIN_CHAT_ID does not belong to ADMIN_TELEGRAM_HANDLE. "
-            "Re-run src/link_telegram.py."
+            "Re-run: python src/cli.py link-telegram"
         )
 
 

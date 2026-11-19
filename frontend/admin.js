@@ -19,24 +19,6 @@ let pendingDelete = null;
 
 initThemeToggle($("theme-toggle"));
 
-// ---------- API ----------
-async function api(path, options = {}) {
-  const res = await fetch(`/api/admin${path}`, options);
-  if (res.status === 401) {                 // only happens once login exists (Branch 2)
-    window.location.href = "/login.html";
-    throw new Error("Not logged in");
-  }
-  if (!res.ok) {
-    let detail = `Error ${res.status}`;
-    try {
-      const body = await res.json();
-      if (typeof body.detail === "string") detail = body.detail;
-    } catch {}
-    throw new Error(detail);
-  }
-  return res.json();
-}
-
 async function loadDocs() {
   try {
     docs = await api("/documents");
@@ -247,20 +229,4 @@ $("confirm-ok").addEventListener("click", async () => {
 searchEl.addEventListener("input", render);
 loadDocs();
 
-// Full-screen "signing out" view, with a manual link in case the redirect stalls.
-function showSignOut() {
-  const splash = document.createElement("div");
-  splash.className = "splash";
-  splash.setAttribute("role", "status");
-  splash.innerHTML =   // static markup, no user data
-    `<div class="splash-inner"><div class="mark">${LOGO_SVG}</div>` +
-    `<p>Signing you out…</p>` +
-    `<small>If you aren't signed out, <a href="/login.html">click here</a></small></div>`;
-  document.body.append(splash);
-}
-
-$("logout-btn").addEventListener("click", async () => {
-  showSignOut();
-  try { await fetch("/api/admin/logout", { method: "POST" }); } catch {}
-  window.location.href = "/login.html";
-});
+initLogout($("logout-btn"));

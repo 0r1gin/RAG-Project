@@ -86,3 +86,92 @@ def all_chunks():
     """Yields (chunk_id, data) for every stored chunk."""
     for d in db.collection("chunks").stream():
         yield d.id, d.to_dict()
+
+
+# ---------------- evaluation ----------------
+# Firestore can't hold a list inside a list (keyword synonym groups are exactly that),
+# so questions and per-question results are stored as JSON text.
+def _iso(data: dict, *fields):
+    for f in fields:
+        if data.get(f) is not None:
+            data[f] = data[f].isoformat()
+    return data
+
+
+def save_dataset(name: str, questions: list[dict]) -> str:
+    ref = db.collection("eval_datasets").document()
+    ref.set({
+        "name": name,
+        "count": len(questions),
+        "questions_json": json.dumps(questions),
+        "created_at": datetime.now(timezone.utc),
+    })
+    return ref.id
+
+
+def list_datasets() -> list[dict]:
+    query = (db.collection("eval_datasets")
+             .order_by("created_at", direction=firestore.Query.DESCENDING)
+             .select(["name", "count", "created_at"]))
+    return [_iso({"id": d.id, **d.to_dict()}, "created_at") for d in query.stream()]
+
+
+def get_dataset(dataset_id: str):
+    snap = db.collection("eval_datasets").document(dataset_id).get()
+    if not snap.exists:
+        return None
+    data = snap.to_dict()
+    return {"id": snap.id, "name": data["name"], "questions": json.loads(data["questions_json"])}
+
+
+def delete_dataset(dataset_id: str) -> bool:
+    ref = db.collection("eval_datasets").document(dataset_id)
+    if not ref.get().exists:
+        return False
+    ref.delete()
+    return True
+
+
+def create_run(fields: dict) -> str:
+    ref = db.collection("eval_runs").document()
+    ref.set({**fields, "started_at": datetime.now(timezone.utc)})
+    return ref.id
+
+
+def update_run(run_id: str, fields: dict):
+    if "results" in fields:
+        fields = {**fields, "results_json": json.dumps(fields.pop("results"))}
+    if fields.get("status") in ("done", "failed"):
+        fields["finished_at"] = datetime.now(timezone.utc)
+    db.collection("eval_runs").document(run_id).update(fields)
+
+
+RUN_LIST_FIELDS = ["dataset_name", "modes", "production_mode", "retrieval_only", "judge",
+                   "status", "done", "total", "summaries", "warning", "error",
+                   "started_at", "finished_at"]
+
+
+def list_runs(limit: int = 50) -> list[dict]:
+    query = (db.collection("eval_runs")
+             .order_by("started_at", direction=firestore.Query.DESCENDING)
+             .limit(limit)
+             .select(RUN_LIST_FIELDS))           # leave out the large results_json
+    return [_iso({"id": d.id, **d.to_dict()}, "started_at", "finished_at") for d in query.stream()]
+
+
+def get_run(run_id: str):
+    snap = db.collection("eval_runs").document(run_id).get()
+    if not snap.exists:
+        return None
+    data = snap.to_dict()
+    data["results"] = json.loads(data.pop("results_json", "{}") or "{}")
+    return _iso({"id": snap.id, **data}, "started_at", "finished_at")
+
+
+def mark_interrupted_runs() -> int:
+    """Runs still 'running' at startup died with the previous server process."""
+    stuck = list(db.collection("eval_runs").where(filter=FieldFilter("status", "==", "running")).stream())
+    for d in stuck:
+        d.reference.update({"status": "failed", "error": "Interrupted: the server restarted during the run",
+                            "finished_at": datetime.now(timezone.utc)})
+    return len(stuck)
