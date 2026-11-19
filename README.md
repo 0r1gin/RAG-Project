@@ -1,4 +1,4 @@
-# doc-chat: Chat With Your Documents
+# RAG chat: Chat With Your Documents
 
 Upload your PDF and text files, then ask questions about them in plain English. Claude answers **only from your documents** and tells you which file each answer came from. If the answer isn't in your files, it says so instead of guessing.
 
